@@ -13,7 +13,7 @@ export class BookingsService {
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
-  ) { }
+  ) {}
 
   async create(userId: string, dto: CreateBookingDto) {
     // 1. หา Event ที่ต้องการจอง
@@ -110,7 +110,10 @@ export class BookingsService {
   async findAllForAdmin(page: number, limit: number) {
     const skip = (page - 1) * limit;
     const data = await this.bookingModel
-      .find() // ไม่ต้องใส่ { userId } แล้วเพื่อน!
+      .find()
+      // 🎯 หัวใจสำคัญอยู่ตรงนี้ครับพู่กัน!
+      .populate('eventId', 'title date location') // ดึงข้อมูล Event (เอาเฉพาะ title, date, location)
+      .populate('userId', 'name email') // ดึงข้อมูล User (เอาเฉพาะ name, email)
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 })

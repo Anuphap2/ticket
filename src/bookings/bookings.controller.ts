@@ -76,7 +76,7 @@ export class BookingsController {
   @Patch(':id/confirm')
   @UseGuards(AccessTokenGuard)
   async confirmBooking(@Param('id') id: string) {
-    // เปลี่ยนสถานะเป็น paid ใน MongoDB
-    return this.bookingsService.updateStatus(id, 'paid');
+    // เปลี่ยนสถานะเป็น confirmed ใน MongoDB
+    return this.bookingsService.updateStatus(id, 'confirmed');
   }
 }

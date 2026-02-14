@@ -14,12 +14,16 @@ export class PaymentsService implements OnModuleInit {
 
   async createPaymentIntent(amount: number) {
     try {
-      return await this.stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // ปัดเศษให้ชัวร์ก่อนส่ง (Stripe รับแค่ Integer)
+      const paymentIntent = await this.stripe.paymentIntents.create({
+        amount: Math.round(amount * 100),
         currency: 'thb',
-        // แถม: ระบุประเภทการจ่ายเงินที่พู่กันต้องการรองรับ
-        payment_method_types: ['card'], 
+        payment_method_types: ['card', 'promptpay'],
       });
+
+      // ส่งกลับไปเฉพาะ clientSecret ในรูปแบบที่หน้าบ้านเรียกใช้
+      return {
+        clientSecret: paymentIntent.client_secret,
+      };
     } catch (error) {
       console.error('Stripe Error:', error.message);
       throw error;
