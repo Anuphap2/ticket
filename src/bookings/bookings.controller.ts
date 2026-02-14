@@ -45,8 +45,8 @@ export class BookingsController {
     return this.bookingsService.findByUser(userId);
   }
 
-  @UseGuards(AccessTokenGuard)
-  @Patch(':id/status') // ใช้ Patch สำหรับการอัปเดตบางส่วน
+  @UseGuards(AccessTokenGuard) // ในอนาคตพู่กันอาจจะเพิ่ม RolesGuard เพื่อเช็คว่าเป็น Admin ไหม
+  @Patch(':id/status')
   async updateStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.bookingsService.updateStatus(id, status);
   }

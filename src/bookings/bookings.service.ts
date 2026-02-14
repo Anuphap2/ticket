@@ -15,27 +15,39 @@ export class BookingsService {
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
-  ) { }
+  ) {}
 
   async create(userId: string, dto: CreateBookingDto) {
     // 1. หา Event ที่ต้องการจอง
     const event = await this.eventModel.findById(dto.eventId);
     if (!event) throw new BadRequestException('ไม่พบกิจกรรมนี้');
 
+    const today = new Date();
+    const eventDate = new Date(event.date);
+
+    if (eventDate < today) {
+      throw new BadRequestException(
+        'ไม่สามารถจองได้ เนื่องจากกิจกรรมนี้สิ้นสุดลงแล้ว',
+      );
+    }
     // 2. เช็คโซนที่เลือก
     const zone = event.zones.find((z) => z.name === dto.zoneName);
     if (!zone) throw new BadRequestException('ไม่พบโซนที่เลือก');
 
     const now = new Date();
     if (new Date(event.date) < now) {
-      throw new BadRequestException('ขออภัย กิจกรรมนี้สิ้นสุดลงแล้ว ไม่สามารถจองได้');
+      throw new BadRequestException(
+        'ขออภัย กิจกรรมนี้สิ้นสุดลงแล้ว ไม่สามารถจองได้',
+      );
     }
 
     if (!zone) throw new BadRequestException('ไม่พบโซนที่เลือก');
 
     // --- เช็คจำนวนที่จองเทียบกับที่นั่งทั้งหมดที่มี (ป้องกัน Logic ผิดพลาด) ---
     if (dto.quantity > zone.availableSeats) {
-      throw new BadRequestException(`ขออภัย ที่นั่งว่างไม่เพียงพอ (คงเหลือ ${zone.availableSeats} ที่นั่ง)`);
+      throw new BadRequestException(
+        `ขออภัย ที่นั่งว่างไม่เพียงพอ (คงเหลือ ${zone.availableSeats} ที่นั่ง)`,
+      );
     }
 
     if (dto.quantity <= 0) {
@@ -78,18 +90,22 @@ export class BookingsService {
   }
 
   async updateStatus(bookingId: string, status: string) {
+    // ตรวจสอบว่าเป็นสถานะที่อนุญาตหรือไม่
     const validStatuses = ['pending', 'confirmed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       throw new BadRequestException('สถานะไม่ถูกต้อง');
     }
 
-    const booking = await this.bookingModel.findByIdAndUpdate(
+    const updatedBooking = await this.bookingModel.findByIdAndUpdate(
       bookingId,
       { status },
-      { new: true }
+      { new: true }, // ให้คืนค่าข้อมูลที่อัปเดตแล้วกลับมา
     );
 
-    if (!booking) throw new BadRequestException('ไม่พบรายการจองนี้');
-    return booking;
+    if (!updatedBooking) {
+      throw new BadRequestException('ไม่พบรายการจองที่ระบุ');
+    }
+
+    return updatedBooking;
   }
 }
