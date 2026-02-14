@@ -35,6 +35,9 @@ export class CreateEventDto {
   @IsNotEmpty()
   location: string;
 
+  @IsString()
+  imageUrl: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ZoneDto)

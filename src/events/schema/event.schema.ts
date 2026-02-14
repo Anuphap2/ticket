@@ -22,7 +22,7 @@ export class Event {
   location: string;
 
   @Prop()
-  posterUrl: string;
+  imageUrl: string;
 
   // เขียนเป็น Array ของ Object ตรงๆ ไปเลย ไม่ต้องสร้าง class Zone แยก
   @Prop({
