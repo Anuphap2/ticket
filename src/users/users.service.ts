@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -6,7 +9,7 @@ import { User, UserDoc, UserRole } from './schemas/user.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private user: Model<UserDoc>) { }
+  constructor(@InjectModel(User.name) private user: Model<UserDoc>) {}
   findByEmail(email: string) {
     return this.user.findOne({ email }).exec();
   }
