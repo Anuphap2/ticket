@@ -31,4 +31,18 @@ export class EventsService {
   async findAll(): Promise<Event[]> {
     return this.eventModel.find({ status: 'active' }).exec();
   }
+
+  async findOne(id: string): Promise<any> {
+    return this.eventModel.findById(id).exec();
+  }
+
+  // แก้ไขข้อมูล (เช่น เปลี่ยนวันที่ หรืออัปเดตราคา)
+  async update(id: string, dto: any): Promise<any> {
+    return this.eventModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+  }
+
+  // ลบอีเวนต์
+  async remove(id: string) {
+    return this.eventModel.findByIdAndDelete(id).exec();
+  }
 }
