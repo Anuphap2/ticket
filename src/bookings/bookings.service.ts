@@ -15,7 +15,7 @@ export class BookingsService {
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
-  ) {}
+  ) { }
 
   async create(userId: string, dto: CreateBookingDto) {
     // 1. หา Event ที่ต้องการจอง
@@ -25,6 +25,22 @@ export class BookingsService {
     // 2. เช็คโซนที่เลือก
     const zone = event.zones.find((z) => z.name === dto.zoneName);
     if (!zone) throw new BadRequestException('ไม่พบโซนที่เลือก');
+
+    const now = new Date();
+    if (new Date(event.date) < now) {
+      throw new BadRequestException('ขออภัย กิจกรรมนี้สิ้นสุดลงแล้ว ไม่สามารถจองได้');
+    }
+
+    if (!zone) throw new BadRequestException('ไม่พบโซนที่เลือก');
+
+    // --- เช็คจำนวนที่จองเทียบกับที่นั่งทั้งหมดที่มี (ป้องกัน Logic ผิดพลาด) ---
+    if (dto.quantity > zone.availableSeats) {
+      throw new BadRequestException(`ขออภัย ที่นั่งว่างไม่เพียงพอ (คงเหลือ ${zone.availableSeats} ที่นั่ง)`);
+    }
+
+    if (dto.quantity <= 0) {
+      throw new BadRequestException('จำนวนที่จองต้องมากกว่า 0');
+    }
 
     // 3. เช็คที่นั่งว่าง
     if (zone.availableSeats < dto.quantity) {
@@ -59,5 +75,21 @@ export class BookingsService {
       .populate('eventId')
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  async updateStatus(bookingId: string, status: string) {
+    const validStatuses = ['pending', 'confirmed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      throw new BadRequestException('สถานะไม่ถูกต้อง');
+    }
+
+    const booking = await this.bookingModel.findByIdAndUpdate(
+      bookingId,
+      { status },
+      { new: true }
+    );
+
+    if (!booking) throw new BadRequestException('ไม่พบรายการจองนี้');
+    return booking;
   }
 }

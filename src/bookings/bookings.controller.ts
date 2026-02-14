@@ -1,4 +1,17 @@
-import { Controller, Post, Body, UseGuards, Req, Get } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Get,
+  Patch,
+  Param,
+} from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
@@ -6,7 +19,7 @@ import { UnauthorizedException } from '@nestjs/common';
 
 @Controller('bookings')
 export class BookingsController {
-  constructor(private readonly bookingsService: BookingsService) { }
+  constructor(private readonly bookingsService: BookingsService) {}
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @UseGuards(AccessTokenGuard) // บังคับให้ต้อง Login ก่อนถึงจะจองได้
@@ -26,9 +39,15 @@ export class BookingsController {
 
   // 2. Endpoint สำหรับดูประวัติการจองของตัวเอง (เดี๋ยวเราไปทำ Service ต่อ)
   @UseGuards(AccessTokenGuard)
-  @Get('bookings')
+  @Get('myBookings')
   async getMyBookings(@Req() req: any) {
     const userId = req.user['sub'];
     return this.bookingsService.findByUser(userId);
+  }
+
+  @UseGuards(AccessTokenGuard)
+  @Patch(':id/status') // ใช้ Patch สำหรับการอัปเดตบางส่วน
+  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.bookingsService.updateStatus(id, status);
   }
 }
