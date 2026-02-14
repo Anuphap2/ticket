@@ -28,6 +28,9 @@ export class Booking {
 
   @Prop({ default: 'pending' }) // pending, confirmed, cancelled
   status: string;
+
+  @Prop()
+  imageUrl: string; // เก็บเป็น URL จาก Cloudinary หรือ Link รูปทั่วไป
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

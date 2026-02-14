@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/require-await */
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
@@ -10,6 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
@@ -29,6 +28,11 @@ import { BookingsModule } from './bookings/bookings.module';
     AuthModule,
     EventsModule,
     BookingsModule,
+
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'), // โฟลเดอร์เก็บรูป
+      serveRoot: '/uploads', // เข้าถึงผ่าน localhost:3000/uploads
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],
