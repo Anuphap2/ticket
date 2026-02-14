@@ -1,98 +1,89 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+```markdown
+# 🎟️ Ticket Booking System (High Concurrency Simulation)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+โปรเจกต์ระบบจองตั๋วคอนเสิร์ตที่ออกแบบมาเพื่อรองรับการใช้งานพร้อมกันจำนวนมาก (High Concurrency) โดยใช้สถาปัตยกรรมแบบ **Asynchronous Queue** เพื่อแก้ไขปัญหา Race Condition และป้องกันระบบล่มเมื่อมีผู้ใช้งานรุมกดบัตรในวินาทีเดียวกัน
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🚀 จุดเด่นของระบบ (Key Features)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+* **Asynchronous Queue Management:** ใช้โครงสร้างข้อมูลแบบ Queue (FIFO) ในการจัดการลำดับการจอง เพื่อลดภาระของ Database
+* **Non-blocking Request Handling:** ระบบตอบกลับทันทีพร้อม `trackingId` ทำให้ผู้ใช้งานไม่ต้องรอคอยนาน (ลดโอกาสเกิด Timeout)
+* **Atomic Operation:** ใช้ `$inc` ของ MongoDB เพื่อให้มั่นใจว่าจำนวนที่นั่งจะมีความแม่นยำ 100% แม้มีการจองพร้อมกันหลักแสนครั้ง
+* **Scalable Architecture:** แยกส่วนการรับคำขอและการบันทึกข้อมูลออกจากกัน (Background Processing) ทำให้ระบบมีความเสถียรสูง
 
-## Project setup
+---
 
+## 🛠️ Tech Stack
+
+* **Backend:** [NestJS](https://nestjs.com/) (Node.js Framework)
+* **Database:** [MongoDB](https://www.mongodb.com/) with Mongoose
+* **Documentation:** [Swagger (OpenAPI)](https://swagger.io/)
+* **Testing:** Axios-based Stress Test Script (Node.js)
+
+---
+
+## 📊 ผลการทดสอบประสิทธิภาพ (Stress Test Results)
+
+จากการทดสอบจำลองสถานการณ์ "สงครามกดบัตร" (K-Pop Concert Simulation) ด้วยการส่งคำขอพร้อมกันจำนวนมากบนเครื่องเครื่องเดียว:
+
+| หัวข้อการทดสอบ | รายละเอียด / ผลลัพธ์ |
+| :--- | :--- |
+| **จำนวน Request ทั้งหมด** | 100,000 รายการ |
+| **ส่งเข้าคิวสำเร็จ (Enqueue)** | **46,319 รายการ** (บนสภาวะเครื่องเดี่ยว) |
+| **ความเร็วเฉลี่ย (Throughput)** | **~280 - 300 Requests/sec** |
+| **ความถูกต้องของข้อมูล** | **Pass** - จำนวนที่นั่งถูกหักออกตรงตามจำนวนที่จองสำเร็จ |
+
+> **หมายเหตุ:** ข้อผิดพลาดที่เกิดขึ้น (Network Error) ในช่วงท้ายของการทดสอบ เกิดจากขีดจำกัดของระบบปฏิบัติการ (OS Socket Limit) ไม่ใช่ข้อผิดพลาดจากตัวโปรแกรม
+
+---
+
+## 🏗️ ขั้นตอนการทำงาน (System Workflow)
+
+1.  **Request:** ผู้ใช้ส่งคำขอจองตั๋วผ่าน `POST /bookings`
+2.  **Queueing:** Server รับคำขอแล้วโยนเข้า **Internal Array Queue** ทันที พร้อมตอบกลับ `trackingId` ในหลักมิลลิวินาที
+3.  **Processing:** ระบบ Background Worker ทยอยดึงงานจาก Queue มาบันทึกลง **MongoDB** อย่างต่อเนื่อง
+4.  **Polling:** ผู้ใช้นำ `trackingId` มาเช็คสถานะการจองผ่าน `GET /bookings/status/:id`
+
+---
+
+## 📝 วิธีการติดตั้งและรันโปรเจกต์
+
+### 1. ติดตั้ง Library ที่จำเป็น
 ```bash
-$ npm install
+npm install
+
 ```
 
-## Compile and run the project
+### 2. ตั้งค่าไฟล์ .env
 
-```bash
-# development
-$ npm run start
+สร้างไฟล์ `.env` ที่ Root Directory แล้วใส่ค่าดังนี้:
 
-# watch mode
-$ npm run start:dev
+```env
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret_key
 
-# production mode
-$ npm run start:prod
 ```
 
-## Run tests
+### 3. รัน Server (Development Mode)
 
 ```bash
-# unit tests
-$ npm run test
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
 ```
 
-## Deployment
+### 4. ตรวจสอบ API Documentation
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+เปิด Browser ไปที่: `http://localhost:3000/api/docs` เพื่อใช้งาน Swagger UI
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+---
+
+## 🧪 วิธีการรัน Stress Test
+
+1. ตรวจสอบไฟล์ `test.js` และใส่ Token ที่ถูกต้อง
+2. รันคำสั่ง:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+node test.js
+
 ```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
