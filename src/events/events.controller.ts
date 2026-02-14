@@ -66,7 +66,7 @@ export class EventsController {
     }
     // ส่ง URL กลับไปเพื่อให้หน้าบ้านนำไปใช้ใน Create/Update Event
     return {
-      url: `http://localhost:3000/uploads/${file.filename}`,
+      url: `${process.env.FRONTEND_URL}/${file.filename}`,
     };
   }
 
