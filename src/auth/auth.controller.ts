@@ -36,9 +36,9 @@ export class AuthController {
   }
 
   @UseGuards(AccessTokenGuard)
-  @Post('logout')
+  @Get('logout')
   logout(@Req() req: any) {
-    return this.authService.logout(req.user.userId);
+    const userId = req.user.sub || req.user.userId;
+    return this.authService.logout(userId);
   }
-
 }
