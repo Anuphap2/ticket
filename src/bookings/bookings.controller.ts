@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -15,26 +16,23 @@ import {
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
-import { UnauthorizedException } from '@nestjs/common';
+import { BookingQueueService } from './booking-queue.service';
 
 @Controller('bookings')
 export class BookingsController {
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(
+    private readonly bookingsService: BookingsService,
+    private readonly bookingQueueService: BookingQueueService,
+  ) { }
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @UseGuards(AccessTokenGuard) // บังคับให้ต้อง Login ก่อนถึงจะจองได้
   @Post() // ตั้งค่าให้รับ HTTP POST สำหรับการจอง
-  async create(@Req() req: any, @Body() createBookingDto: CreateBookingDto) {
-    console.log('User data from Token:', req.user); // พู่กันเช็คค่านี้ใน Terminal ดูนะ
+  async create(@Req() req: any, @Body() dto: CreateBookingDto) {
+    const userId = req.user['sub'];
 
-    // ลองเปลี่ยนจาก 'sub' เป็น 'id' หรือ '_id' ถ้า log ออกมาเป็นชื่ออื่น
-    const userId = req.user?.sub || req.user?.id || req.user?._id;
-
-    if (!userId) {
-      throw new UnauthorizedException('หา ID ผู้ใช้ไม่เจอ');
-    }
-
-    return this.bookingsService.create(userId, createBookingDto);
+    // ส่งงานเข้า Queue แทนการรันตรงๆ เพื่อป้องกัน Database พีค
+    return this.bookingQueueService.enqueue(userId, dto);
   }
 
   // 2. Endpoint สำหรับดูประวัติการจองของตัวเอง (เดี๋ยวเราไปทำ Service ต่อ)
@@ -49,5 +47,11 @@ export class BookingsController {
   @Patch(':id/status')
   async updateStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.bookingsService.updateStatus(id, status);
+  }
+
+  @Get('status/:trackingId')
+  @UseGuards(AccessTokenGuard)
+  async getStatus(@Param('trackingId') trackingId: string) {
+    return this.bookingQueueService.getStatus(trackingId);
   }
 }

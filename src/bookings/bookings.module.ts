@@ -7,13 +7,14 @@ import { BookingsController } from './bookings.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Booking, BookingSchema } from './schema/booking.shema';
 import { Event, EventSchema } from '../events/schema/event.schema';
+import { BookingQueueService } from './booking-queue.service';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Booking.name, schema: BookingSchema }]),
     MongooseModule.forFeature([{ name: Event.name, schema: EventSchema }]),
   ],
-  providers: [BookingsService],
+  providers: [BookingsService, BookingQueueService],
   controllers: [BookingsController],
 })
 export class BookingsModule {}
