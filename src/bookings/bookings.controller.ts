@@ -26,7 +26,7 @@ export class BookingsController {
   constructor(
     private readonly bookingsService: BookingsService,
     private readonly bookingQueueService: BookingQueueService,
-  ) {}
+  ) { }
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @UseGuards(AccessTokenGuard)
@@ -71,5 +71,12 @@ export class BookingsController {
       parseInt(page),
       parseInt(limit),
     );
+  }
+
+  @Patch(':id/confirm')
+  @UseGuards(AccessTokenGuard)
+  async confirmBooking(@Param('id') id: string) {
+    // เปลี่ยนสถานะเป็น paid ใน MongoDB
+    return this.bookingsService.updateStatus(id, 'paid');
   }
 }

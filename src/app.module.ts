@@ -7,6 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { PaymentsModule } from './payments/payments.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -28,6 +29,7 @@ import { join } from 'path';
     AuthModule,
     EventsModule,
     BookingsModule,
+    PaymentsModule,
 
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'), // โฟลเดอร์เก็บรูป
@@ -37,4 +39,4 @@ import { join } from 'path';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

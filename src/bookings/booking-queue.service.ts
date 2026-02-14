@@ -16,7 +16,7 @@ export class BookingQueueService {
     { status: string; data?: any; error?: string }
   >();
 
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(private readonly bookingsService: BookingsService) { }
 
   // 1. เพิ่มเข้าคิวแล้วตอบกลับทันที
   async enqueue(userId: string, dto: any) {

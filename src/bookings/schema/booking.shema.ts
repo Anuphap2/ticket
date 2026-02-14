@@ -30,6 +30,9 @@ export class Booking {
   status: string;
 
   @Prop()
+  paidAt?: Date; // เก็บเวลาที่จ่ายจริงไว้โชว์ในระบบ
+
+  @Prop()
   imageUrl: string; // เก็บเป็น URL จาก Cloudinary หรือ Link รูปทั่วไป
 }
 
