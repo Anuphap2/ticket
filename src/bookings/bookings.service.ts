@@ -9,7 +9,6 @@ import { Model } from 'mongoose';
 import { Booking, BookingDocument } from './schema/booking.shema';
 import { Event, EventDocument } from '../events/schema/event.schema';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { Types } from 'mongoose';
 
 @Injectable()
 export class BookingsService {
@@ -44,7 +43,7 @@ export class BookingsService {
 
     // 6. บันทึกข้อมูลการจอง
     const newBooking = new this.bookingModel({
-      userId,
+      userId: userId,
       eventId: dto.eventId,
       zoneName: dto.zoneName,
       quantity: dto.quantity,
@@ -56,7 +55,7 @@ export class BookingsService {
 
   async findByUser(userId: string) {
     return this.bookingModel
-      .find({ userId: new Types.ObjectId(userId) }) // ครอบแบบนี้ครับ
+      .find({ userId: userId }) // ครอบแบบนี้ครับ
       .populate('eventId')
       .sort({ createdAt: -1 })
       .exec();
