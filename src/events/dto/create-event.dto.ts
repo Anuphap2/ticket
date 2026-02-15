@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsDateString,
   IsArray,
+  IsOptional,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
