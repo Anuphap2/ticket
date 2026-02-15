@@ -124,6 +124,7 @@ export class BookingsService {
     return {
       data,
       total,
+      page: Number(page),
       currentPage: page,
       totalPages: Math.ceil(total / limit),
     };
