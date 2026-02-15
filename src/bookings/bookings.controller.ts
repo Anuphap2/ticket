@@ -34,7 +34,7 @@ export class BookingsController {
   constructor(
     private readonly bookingsService: BookingsService,
     private readonly bookingQueueService: BookingQueueService,
-  ) {}
+  ) { }
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @ApiBearerAuth()
@@ -57,9 +57,13 @@ export class BookingsController {
   @ApiResponse({ status: 200, description: 'Return my bookings.' })
   @UseGuards(AccessTokenGuard)
   @Get('myBookings')
-  async getMyBookings(@Req() req: any) {
+  async getMyBookings(
+    @Req() req: any,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
     const userId = req.user['sub'];
-    return this.bookingsService.findByUser(userId);
+    return this.bookingsService.findByUser(userId, Number(page), Number(limit));
   }
 
   // 3. Endpoint สำหรับ Admin อัปเดตสถานะตั๋วรายใบ

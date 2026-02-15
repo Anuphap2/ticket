@@ -137,12 +137,26 @@ export class BookingsService {
 
   // --- Public Queries ---
 
-  async findByUser(userId: string) {
-    return this.bookingModel
-      .find({ userId })
-      .populate('eventId')
-      .sort({ createdAt: -1 })
-      .exec();
+  async findByUser(userId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.bookingModel
+        .find({ userId })
+        .populate('eventId')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.bookingModel.countDocuments({ userId }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      last_page: Math.ceil(total / limit),
+    };
   }
 
   async updateStatus(bookingId: string, status: string) {
