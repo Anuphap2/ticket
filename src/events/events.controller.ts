@@ -14,28 +14,47 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Query, // เพิ่ม Query สำหรับรับ eventId
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
-import * as fs from 'fs'; // เพิ่ม fs สำหรับลบไฟล์
+import * as fs from 'fs';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody, ApiParam } from '@nestjs/swagger';
 
+@ApiTags('Events')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(private readonly eventsService: EventsService) { }
 
+  @ApiOperation({ summary: 'Get all events' })
+  @ApiResponse({ status: 200, description: 'Return all events.' })
   @Get()
   findAll() {
     return this.eventsService.findAll();
   }
 
-  // 2. อัปโหลดรูปภาพ (Admin Only) + ลบรูปเก่าถ้าเป็นการแก้ไข
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload event image (Admin only)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Image uploaded successfully.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Post('upload')
@@ -73,27 +92,12 @@ export class EventsController {
         const event = await this.eventsService.findOne(eventId);
 
         if (event && event.imageUrl) {
-          // 1. แกะชื่อไฟล์ออกมา (รองรับทั้ง URL เต็ม หรือแค่ชื่อไฟล์)
           const fileName = event.imageUrl.split('/').pop();
-
-          // 2. สร้าง Path แบบ Absolute เพื่อความแม่นยำ
-          // ใช้ __dirname หรือ process.cwd() ให้ถูกจุด
           const filePath = join(process.cwd(), 'uploads', fileName);
 
-          console.log('🔍 กำลังตรวจสอบการลบไฟล์:');
-          console.log('- Event ID:', eventId);
-          console.log('- Old URL:', event.imageUrl);
-          console.log('- Full Path:', filePath);
-
-          // 3. ตรวจสอบก่อนลบ
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
-            console.log('✅ ลบรูปภาพเก่าเรียบร้อย!');
-          } else {
-            console.warn('⚠️ ตรวจพบ Path แต่ไม่พบไฟล์จริงในโฟลเดอร์ uploads');
           }
-        } else {
-          console.log('ℹ️ ไม่พบรูปภาพเดิมในระบบ (อาจเป็นการลงรูปครั้งแรก)');
         }
       } catch (error) {
         console.error('❌ Error ระหว่างลบไฟล์:', error.message);
@@ -106,6 +110,9 @@ export class EventsController {
     };
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new event (Admin only)' })
+  @ApiResponse({ status: 201, description: 'Event created successfully.' })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Post()
@@ -113,11 +120,17 @@ export class EventsController {
     return this.eventsService.create(dto);
   }
 
+  @ApiOperation({ summary: 'Get event by ID' })
+  @ApiResponse({ status: 200, description: 'Return the event.' })
+  @ApiResponse({ status: 404, description: 'Event not found.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update event (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Event updated successfully.' })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Patch(':id')
@@ -125,11 +138,13 @@ export class EventsController {
     return this.eventsService.update(id, dto);
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete event (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Event deleted successfully.' })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Delete(':id')
   async remove(@Param('id') id: string) {
-    // แถม: ตอนลบ Event ก็ควรลบรูปทิ้งด้วยนะพู่กัน!
     const event = await this.eventsService.findOne(id);
     if (event && event.imageUrl) {
       const fileName = event.imageUrl.split('/').pop();
