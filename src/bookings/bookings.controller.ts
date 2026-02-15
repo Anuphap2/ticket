@@ -34,7 +34,7 @@ export class BookingsController {
   constructor(
     private readonly bookingsService: BookingsService,
     private readonly bookingQueueService: BookingQueueService,
-  ) { }
+  ) {}
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @ApiBearerAuth()

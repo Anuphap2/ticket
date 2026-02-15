@@ -1,109 +1,140 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-floating-promises */
-/* eslint-disable @typescript-eslint/require-await */
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
+// สร้าง Interface เพื่อให้อ่านง่ายและมี Type Safety
+interface QueueItem {
+  trackingId: string;
+  userId: string;
+  dto: CreateBookingDto;
+}
+
+export interface BookingStatus {
+  status: 'processing' | 'success' | 'failed' | 'not_found';
+  data?: any;
+  error?: string;
+  initialPosition?: number;
+  remainingQueue?: number;
+  message?: string;
+}
+
 @Injectable()
 export class BookingQueueService {
-  private queue: any[] = [];
+  private readonly logger = new Logger(BookingQueueService.name);
+  private queue: QueueItem[] = [];
   private isProcessing = false;
+  private bookingStatus = new Map<string, BookingStatus>();
 
-  // ใช้ Map เก็บสถานะ และเพิ่มช่องเก็บลำดับคิวเริ่มต้น
-  private bookingStatus = new Map<
-    string,
-    { status: string; data?: any; error?: string; initialPosition?: number }
-  >();
-
-  // ตั้งเวลาลบข้อมูลออกจาก RAM (มิลลิวินาที) เช่น 10 นาที
-  private readonly CLEANUP_TIMEOUT = 10 * 60 * 1000;
+  private readonly CLEANUP_TIMEOUT = 10 * 60 * 1000; // 10 นาที
 
   constructor(private readonly bookingsService: BookingsService) {}
 
-  // 1. เพิ่มเข้าคิวแล้วตอบกลับลำดับคิวทันที
+  /**
+   * 1. เพิ่มข้อมูลเข้าคิว
+   */
   async enqueue(userId: string, dto: CreateBookingDto) {
     const trackingId = `${userId}-${Date.now()}`;
-    const currentQueuePosition = this.queue.length + 1; // ลำดับที่ต่อท้ายคิว
+    const position = this.queue.length + 1;
 
+    // บันทึกสถานะเริ่มต้น
     this.bookingStatus.set(trackingId, {
       status: 'processing',
-      initialPosition: currentQueuePosition,
+      initialPosition: position,
     });
 
     this.queue.push({ trackingId, userId, dto });
-    this.processQueue();
+
+    // รันกระบวนการเบื้องหลัง (ไม่รอ await เพื่อให้ตอบกลับ User ทันที)
+    this.processQueue().catch((err) =>
+      this.logger.error('Queue processing error', err),
+    );
 
     return {
       trackingId,
       status: 'processing',
-      queuePosition: currentQueuePosition, // ส่งลำดับให้หน้าบ้านโชว์
-      message: `คุณอยู่ในคิวที่ ${currentQueuePosition} กรุณารอสักครู่`,
+      queuePosition: position,
+      message: `คุณอยู่ในคิวที่ ${position} กรุณารอสักครู่`,
     };
   }
 
+  /**
+   * 2. กระบวนการประมวลผลคิว (Worker)
+   */
   private async processQueue() {
     if (this.isProcessing || this.queue.length === 0) return;
+
     this.isProcessing = true;
 
     while (this.queue.length > 0) {
-      const { trackingId, userId, dto } = this.queue.shift();
-      try {
-        const result = await this.bookingsService.create(userId, dto);
-        this.updateStatusAndScheduleCleanup(trackingId, {
-          status: 'success',
-          data: result,
-        });
-      } catch (error) {
-        this.updateStatusAndScheduleCleanup(trackingId, {
-          status: 'failed',
-          error: error.message,
-        });
-      }
+      const item = this.queue.shift();
+      if (!item) continue;
+
+      await this.handleTask(item);
     }
+
     this.isProcessing = false;
   }
 
-  // ฟังก์ชันช่วยอัปเดตสถานะและตั้งเวลาลบข้อมูลทิ้ง (Prevent Memory Leak)
-  private updateStatusAndScheduleCleanup(trackingId: string, finalStatus: any) {
-    this.bookingStatus.set(trackingId, finalStatus);
-
-    // ลบข้อมูลออกจาก Map หลังจากเวลาที่กำหนด
-    setTimeout(() => {
-      this.bookingStatus.delete(trackingId);
-    }, this.CLEANUP_TIMEOUT);
+  /**
+   * 3. จัดการแต่ละรายการในคิว
+   */
+  private async handleTask({ trackingId, userId, dto }: QueueItem) {
+    try {
+      const result = await this.bookingsService.create(userId, dto);
+      this.finishTask(trackingId, { status: 'success', data: result });
+    } catch (error: any) {
+      this.finishTask(trackingId, { status: 'failed', error: error.message });
+    }
   }
 
-  // 2. ฟังก์ชันเช็คสถานะแบบโชว์คิวที่เหลือ
-  getStatus(trackingId: string) {
-    const statusEntry = this.bookingStatus.get(trackingId);
+  /**
+   * 4. สรุปผลและตั้งเวลาล้างข้อมูล
+   */
+  private finishTask(trackingId: string, finalStatus: BookingStatus) {
+    this.bookingStatus.set(trackingId, finalStatus);
 
-    if (!statusEntry) {
-      return {
-        status: 'not_found',
-        message: 'ไม่พบข้อมูลการจองหรือเซสชันหมดอายุ',
-      };
+    // ลบข้อมูลทิ้งอัตโนมัติเมื่อถึงเวลา
+    setTimeout(
+      () => this.bookingStatus.delete(trackingId),
+      this.CLEANUP_TIMEOUT,
+    );
+  }
+
+  /**
+   * 5. เช็คสถานะปัจจุบัน
+   */
+  getStatus(trackingId: string): BookingStatus {
+    const currentStatus = this.bookingStatus.get(trackingId);
+
+    if (!currentStatus) {
+      return { status: 'not_found', message: 'ไม่พบข้อมูลหรือเซสชันหมดอายุ' };
     }
 
-    if (statusEntry.status === 'processing') {
-      const indexInQueue = this.queue.findIndex(
-        (item) => item.trackingId === trackingId,
-      );
-
-      // ถ้า indexInQueue เป็น -1 แปลว่าถูก shift() ออกจาก queue ไปเข้ากระบวนการบันทึก DB แล้ว
-      const isBeingProcessed = indexInQueue === -1;
-
-      return {
-        ...statusEntry,
-        remainingQueue: isBeingProcessed ? 0 : indexInQueue + 1,
-        message: isBeingProcessed
-          ? 'กำลังบันทึกข้อมูลการจองของคุณ...'
-          : `รออีก ${indexInQueue + 1} คิวจะถึงตาคุณ`,
-      };
+    if (currentStatus.status === 'processing') {
+      return this.calculateLivePosition(trackingId, currentStatus);
     }
 
-    return statusEntry;
+    return currentStatus;
+  }
+
+  /**
+   * Helper: คำนวณตำแหน่งล่าสุดในคิว
+   */
+  private calculateLivePosition(
+    trackingId: string,
+    status: BookingStatus,
+  ): BookingStatus {
+    const index = this.queue.findIndex(
+      (item) => item.trackingId === trackingId,
+    );
+    const isWorking = index === -1;
+
+    return {
+      ...status,
+      remainingQueue: isWorking ? 0 : index + 1,
+      message: isWorking
+        ? 'กำลังบันทึกข้อมูลการจองของคุณ...'
+        : `รออีก ${index + 1} คิวจะถึงตาคุณ`,
+    };
   }
 }
