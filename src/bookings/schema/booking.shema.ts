@@ -22,6 +22,8 @@ export class Booking {
   @Prop({ required: true })
   totalPrice: number; // ราคาทั้งหมด
 
+
+
   @Prop({ default: 'pending' }) // pending, confirmed, cancelled
   status: string;
 

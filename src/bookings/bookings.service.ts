@@ -17,7 +17,7 @@ export class BookingsService {
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
-  ) {}
+  ) { }
 
   // src/bookings/bookings.service.ts
 
@@ -25,9 +25,19 @@ export class BookingsService {
     // 1. ตรวจสอบเงื่อนไขเบื้องต้น (Event มีจริงไหม, วันที่ผ่านไปหรือยัง)
     const { zone } = await this.validateBookingRequest(dto);
 
-    // 2. ตัดสต็อกแบบ Atomic ป้องกัน Overbooking
-    // เมธอดนี้จะพ่น BadRequestException ทันทีถ้าที่นั่งไม่พอ
-    await this.decreaseAvailableSeats(dto.eventId, dto.zoneName, dto.quantity);
+    // 2. ตัดสต็อกแบบ Atomic
+    if (dto.seatNumbers && dto.seatNumbers.length > 0) {
+      // 2.1 กรณีระบุที่นั่ง (Seated)
+      if (dto.seatNumbers.length !== dto.quantity) {
+        throw new BadRequestException('จำนวนที่นั่งที่เลือกไม่ตรงกับจำนวนตั๋ว');
+      }
+      await this.reserveSeats(dto.eventId, dto.seatNumbers);
+      // ตัด Available Seats ของโซนด้วย (เพื่อให้ยอดรวมตรงกัน)
+      await this.decreaseAvailableSeats(dto.eventId, dto.zoneName, dto.quantity);
+    } else {
+      // 2.2 กรณีไม่ระบุที่นั่ง (Standing / General)
+      await this.decreaseAvailableSeats(dto.eventId, dto.zoneName, dto.quantity);
+    }
 
     // 3. คำนวณราคาและบันทึกข้อมูลการจอง
     const totalPrice = zone.price * dto.quantity;
@@ -37,10 +47,39 @@ export class BookingsService {
       zoneName: dto.zoneName,
       quantity: dto.quantity,
       totalPrice,
-      status: 'confirmed', // หรือ 'confirmed' ตามธุรกิจของคุณ
+      status: 'confirmed',
+      seatNumbers: dto.seatNumbers || [],
     });
 
     return await newBooking.save();
+  }
+
+  private async reserveSeats(eventId: string, seatNumbers: string[]) {
+    // ใช้ updateOne + arrayFilters เพื่อ update หลาย element ใน array เดียวกัน (MongoDB feature)
+    // แต่เพื่อความง่ายและ Atomic:
+    // เราจะเช็คว่าที่นั่งทั้งหมดว่างอยู่ไหม และ update ทีเดียว
+
+    // 1. เช็คและ Lock ที่นั่ง (Optimistic Concurrency Control)
+    const result = await this.eventModel.updateOne(
+      {
+        _id: eventId,
+        seats: {
+          $all: seatNumbers.map(no => ({
+            $elemMatch: { seatNo: no, isAvailable: true }
+          }))
+        }
+      },
+      {
+        $set: { "seats.$[elem].isAvailable": false }
+      },
+      {
+        arrayFilters: [{ "elem.seatNo": { $in: seatNumbers } }]
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      throw new BadRequestException('ขออภัย ที่นั่งที่คุณเลือกถูกจองไปแล้ว หรือข้อมูลไม่ถูกต้อง');
+    }
   }
 
   // --- Helpers / Private Methods (ช่วยให้โค้ดหลักอ่านง่าย) ---

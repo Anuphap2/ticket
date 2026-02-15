@@ -58,6 +58,21 @@ export class CreateEventDto {
   @IsString()
   imageUrl: string;
 
+  @ApiProperty({ example: 'standing', enum: ['seated', 'standing'] })
+  @IsString()
+  type: string;
+
+  @ApiProperty({ example: 10, required: false })
+  rows?: number;
+
+  @ApiProperty({ example: 20, required: false })
+  seatsPerRow?: number;
+
+  @ApiProperty({ required: false })
+  @IsArray()
+  @IsOptional()
+  seats?: any[];
+
   @ApiProperty({ type: [ZoneDto], description: 'Zones available in the event' })
   @IsArray()
   @ValidateNested({ each: true })

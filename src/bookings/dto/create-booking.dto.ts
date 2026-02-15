@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, Min, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateBookingDto {
@@ -23,4 +23,13 @@ export class CreateBookingDto {
   @IsNumber()
   @Min(1)
   quantity: number;
+
+  @ApiProperty({
+    example: ['A1', 'A2'],
+    description: 'เลขที่นั่งที่ต้องการจอง (สำหรับบัตรนั่ง)',
+    required: false,
+  })
+  @IsString({ each: true })
+  @IsOptional()
+  seatNumbers?: string[];
 }
