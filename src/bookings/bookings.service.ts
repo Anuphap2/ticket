@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
@@ -20,23 +19,25 @@ export class BookingsService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
   ) {}
 
+  // src/bookings/bookings.service.ts
+
   async create(userId: string, dto: CreateBookingDto) {
-    // 1. ตรวจสอบเงื่อนไขการจองทั้งหมด (แยกไปไว้ที่ Private Method)
-    const { event, zone } = await this.validateBookingRequest(dto);
+    // 1. ตรวจสอบเงื่อนไขเบื้องต้น (Event มีจริงไหม, วันที่ผ่านไปหรือยัง)
+    const { zone } = await this.validateBookingRequest(dto);
 
-    // 2. คำนวณราคา
-    const totalPrice = zone.price * dto.quantity;
-
-    // 3. ทำการจอง (ตัดสต็อกแบบ Atomic)
+    // 2. ตัดสต็อกแบบ Atomic ป้องกัน Overbooking
+    // เมธอดนี้จะพ่น BadRequestException ทันทีถ้าที่นั่งไม่พอ
     await this.decreaseAvailableSeats(dto.eventId, dto.zoneName, dto.quantity);
 
-    // 4. บันทึกข้อมูล
+    // 3. คำนวณราคาและบันทึกข้อมูลการจอง
+    const totalPrice = zone.price * dto.quantity;
     const newBooking = new this.bookingModel({
       userId,
       eventId: dto.eventId,
       zoneName: dto.zoneName,
       quantity: dto.quantity,
       totalPrice,
+      status: 'confirmed', // หรือ 'confirmed' ตามธุรกิจของคุณ
     });
 
     return await newBooking.save();
@@ -76,10 +77,23 @@ export class BookingsService {
     zoneName: string,
     quantity: number,
   ) {
-    return await this.eventModel.updateOne(
-      { _id: eventId, 'zones.name': zoneName },
-      { $inc: { 'zones.$.availableSeats': -quantity } },
+    const result = await this.eventModel.updateOne(
+      {
+        _id: eventId,
+        'zones.name': zoneName,
+        'zones.availableSeats': { $gte: quantity }, // เพิ่มเงื่อนไข: ต้องมีที่นั่งว่าง >= จำนวนที่จอง
+      },
+      {
+        $inc: { 'zones.$.availableSeats': -quantity },
+      },
     );
+
+    // ถ้า nModified เป็น 0 แสดงว่าเงื่อนไขไม่ตรง (ที่นั่งอาจจะเพิ่งเต็มไปตอนที่เรากำลังจะหัก)
+    if (result.modifiedCount === 0) {
+      throw new BadRequestException('ขออภัย ที่นั่งว่างไม่เพียงพอในขณะนี้');
+    }
+
+    return result;
   }
 
   // --- Public Queries ---
