@@ -38,8 +38,12 @@ export class BookingsController {
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a new booking (Enqueue)' })
-  @ApiResponse({ status: 201, description: 'Booking request queued.' })
+  @ApiOperation({ summary: 'สร้างรายการจองใหม่ (เข้า Queue)' })
+  @ApiResponse({ status: 201, description: 'ส่งคำขอเข้าคิวจองสำเร็จ' })
+  @ApiResponse({
+    status: 400,
+    description: 'ข้อมูลไม่ถูกต้อง หรือที่นั่งไม่พอ',
+  })
   @UseGuards(AccessTokenGuard)
   @Post()
   async create(@Req() req: any, @Body() dto: CreateBookingDto) {
@@ -49,7 +53,7 @@ export class BookingsController {
 
   // 2. Endpoint สำหรับดูประวัติการจองของตัวเอง
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get my bookings' })
+  @ApiOperation({ summary: 'ดึงรายการจองของตัวเอง' })
   @ApiResponse({ status: 200, description: 'Return my bookings.' })
   @UseGuards(AccessTokenGuard)
   @Get('myBookings')
@@ -60,7 +64,7 @@ export class BookingsController {
 
   // 3. Endpoint สำหรับ Admin อัปเดตสถานะตั๋วรายใบ
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update booking status (Admin only)' })
+  @ApiOperation({ summary: '[Admin] ดูประวัติการจองทั้งหมด พร้อมแบ่งหน้า' })
   @ApiResponse({ status: 200, description: 'Booking status updated.' })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)

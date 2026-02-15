@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   IsString,
   IsNotEmpty,
@@ -10,7 +9,7 @@ import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 class ZoneDto {
-  @ApiProperty({ example: 'Zone A', description: 'Name of the zone' })
+  @ApiProperty({ example: 'Zone A' })
   @IsString()
   @IsNotEmpty()
   name: string;
@@ -30,20 +29,32 @@ export class CreateEventDto {
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ example: 'Best concert ever', description: 'Description of the event' })
+  @ApiProperty({
+    example: 'Best concert ever',
+    description: 'Description of the event',
+  })
   @IsString()
   description: string;
 
-  @ApiProperty({ example: '2023-12-31T18:00:00Z', description: 'Date of the event' })
+  @ApiProperty({
+    example: '2023-12-31T18:00:00Z',
+    description: 'Date of the event',
+  })
   @IsDateString()
   date: string;
 
-  @ApiProperty({ example: 'Bangkok Arena', description: 'Location of the event' })
+  @ApiProperty({
+    example: 'Bangkok Arena',
+    description: 'Location of the event',
+  })
   @IsString()
   @IsNotEmpty()
   location: string;
 
-  @ApiProperty({ example: 'http://example.com/image.jpg', description: 'Image URL of the event' })
+  @ApiProperty({
+    example: 'http://example.com/image.jpg',
+    description: 'Image URL of the event',
+  })
   @IsString()
   imageUrl: string;
 

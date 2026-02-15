@@ -5,6 +5,7 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { Injectable } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
+import { CreateBookingDto } from './dto/create-booking.dto';
 
 @Injectable()
 export class BookingQueueService {
@@ -23,7 +24,7 @@ export class BookingQueueService {
   constructor(private readonly bookingsService: BookingsService) {}
 
   // 1. เพิ่มเข้าคิวแล้วตอบกลับลำดับคิวทันที
-  async enqueue(userId: string, dto: any) {
+  async enqueue(userId: string, dto: CreateBookingDto) {
     const trackingId = `${userId}-${Date.now()}`;
     const currentQueuePosition = this.queue.length + 1; // ลำดับที่ต่อท้ายคิว
 
