@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
@@ -40,6 +36,24 @@ export class Event {
 
   @Prop({ default: 'active' })
   status: string;
+
+  @Prop({ enum: ['seated', 'standing'], default: 'standing' })
+  type: string;
+
+  @Prop()
+  rows: number; // เช่น 10 แถว
+
+  @Prop()
+  seatsPerRow: number; // เช่น แถวละ 10 ที่นั่ง
+
+  // หรือถ้าจะเก็บสถานะที่นั่งแบบละเอียด
+  @Prop([
+    {
+      seatNo: String,
+      isAvailable: { type: Boolean, default: true },
+    },
+  ])
+  seats: { seatNo: string; isAvailable: boolean }[];
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);

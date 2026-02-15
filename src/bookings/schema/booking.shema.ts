@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { User } from '../../users/schemas/user.schema';
@@ -34,6 +30,9 @@ export class Booking {
 
   @Prop()
   imageUrl: string; // เก็บเป็น URL จาก Cloudinary หรือ Link รูปทั่วไป
+
+  @Prop([String])
+  seatNumbers: string[];
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
