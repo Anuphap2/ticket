@@ -17,7 +17,7 @@ export class BookingsService {
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
-  ) { }
+  ) {}
 
   // src/bookings/bookings.service.ts
 
@@ -33,10 +33,18 @@ export class BookingsService {
       }
       await this.reserveSeats(dto.eventId, dto.seatNumbers);
       // ตัด Available Seats ของโซนด้วย (เพื่อให้ยอดรวมตรงกัน)
-      await this.decreaseAvailableSeats(dto.eventId, dto.zoneName, dto.quantity);
+      await this.decreaseAvailableSeats(
+        dto.eventId,
+        dto.zoneName,
+        dto.quantity,
+      );
     } else {
       // 2.2 กรณีไม่ระบุที่นั่ง (Standing / General)
-      await this.decreaseAvailableSeats(dto.eventId, dto.zoneName, dto.quantity);
+      await this.decreaseAvailableSeats(
+        dto.eventId,
+        dto.zoneName,
+        dto.quantity,
+      );
     }
 
     // 3. คำนวณราคาและบันทึกข้อมูลการจอง
@@ -64,21 +72,23 @@ export class BookingsService {
       {
         _id: eventId,
         seats: {
-          $all: seatNumbers.map(no => ({
-            $elemMatch: { seatNo: no, isAvailable: true }
-          }))
-        }
+          $all: seatNumbers.map((no) => ({
+            $elemMatch: { seatNo: no, isAvailable: true },
+          })),
+        },
       },
       {
-        $set: { "seats.$[elem].isAvailable": false }
+        $set: { 'seats.$[elem].isAvailable': false },
       },
       {
-        arrayFilters: [{ "elem.seatNo": { $in: seatNumbers } }]
-      }
+        arrayFilters: [{ 'elem.seatNo': { $in: seatNumbers } }],
+      },
     );
 
     if (result.modifiedCount === 0) {
-      throw new BadRequestException('ขออภัย ที่นั่งที่คุณเลือกถูกจองไปแล้ว หรือข้อมูลไม่ถูกต้อง');
+      throw new BadRequestException(
+        'ขออภัย ที่นั่งที่คุณเลือกถูกจองไปแล้ว หรือข้อมูลไม่ถูกต้อง',
+      );
     }
   }
 

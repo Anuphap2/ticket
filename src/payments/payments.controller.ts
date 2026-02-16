@@ -1,4 +1,3 @@
-
 import { Controller, Post, Body } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
@@ -6,7 +5,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
-    constructor(private readonly paymentsService: PaymentsService) { }
+  constructor(private readonly paymentsService: PaymentsService) {}
 
     @ApiOperation({ summary: 'Create payment intent' })
     @ApiResponse({ status: 201, description: 'Payment intent created.' })
@@ -25,3 +24,4 @@ export class PaymentsController {
 
     
 }
+
