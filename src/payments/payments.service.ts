@@ -22,6 +22,7 @@ export class PaymentsService implements OnModuleInit {
         currency: 'thb',
         payment_method_types: ['card', 'promptpay'],
       });
+      
       return { clientSecret: paymentIntent.client_secret };
     } catch (error) {
       console.error('Stripe Error:', error.message);

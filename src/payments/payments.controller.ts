@@ -22,4 +22,6 @@ export class PaymentsController {
     create(@Body() body: { amount: number }) {
         return this.paymentsService.createPaymentIntent(body.amount);
     }
+
+    
 }

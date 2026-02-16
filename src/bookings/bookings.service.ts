@@ -47,7 +47,7 @@ export class BookingsService {
       zoneName: dto.zoneName,
       quantity: dto.quantity,
       totalPrice,
-      status: 'confirmed',
+      status: 'pending',
       seatNumbers: dto.seatNumbers || [],
     });
 
