@@ -1,16 +1,21 @@
+// src/app.controller.ts
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-@ApiTags('App')
+@ApiTags('System')
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) { }
+  // 🎯 ลบ Constructor ที่มี AppService ออก เพราะเราไม่ได้ใช้แล้ว
+  constructor() {}
 
-  @ApiOperation({ summary: 'Health Check' })
-  @ApiResponse({ status: 200, description: 'Return Hello World.' })
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  @Get('health')
+  @ApiOperation({ summary: 'เช็คสถานะการทำงานของเซิร์ฟเวอร์' })
+  @ApiResponse({ status: 200, description: 'Server is running normally.' })
+  getHealth() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    };
   }
 }

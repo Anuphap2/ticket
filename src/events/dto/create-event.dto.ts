@@ -9,7 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class ZoneDto {
   @ApiProperty({ example: 'Zone A' })
@@ -27,11 +27,16 @@ class ZoneDto {
   @IsNotEmpty()
   totalSeats: number;
 
+  // 🎯 เพิ่ม availableSeats เพื่อรองรับการ Refactor ใน Service
+  @ApiPropertyOptional({ example: 50 })
+  @IsOptional()
+  @IsNumber()
+  availableSeats?: number;
+
   @ApiProperty({ example: 'seated', enum: ['seated', 'standing'] })
   @IsEnum(['seated', 'standing'])
   type: string;
 
-  // ถ้าเป็นโซนนั่ง ค่อยส่งค่าพวกนี้มา (Optional)
   @ApiProperty({ example: 10, required: false })
   @IsOptional()
   @IsNumber()
@@ -51,7 +56,7 @@ export class CreateEventDto {
 
   @ApiProperty({ example: 'Best concert ever' })
   @IsString()
-  @IsOptional() // ใส่เป็น Optional ไว้เผื่อบางงานไม่ต้องระบุละเอียด
+  @IsOptional()
   description?: string;
 
   @ApiProperty({ example: '2023-12-31T18:00:00Z' })

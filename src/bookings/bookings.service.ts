@@ -19,36 +19,141 @@ export class BookingsService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
   ) {}
 
-  // src/bookings/bookings.service.ts
-
+  /**
+   * สร้างรายการจองใหม่ (Refactored Version)
+   */
   async create(userId: string, dto: CreateBookingDto) {
-    // 1. ตรวจสอบเงื่อนไขเบื้องต้น (Event มีจริงไหม, วันที่ผ่านไปหรือยัง)
+    // 1. ตรวจสอบเงื่อนไขความถูกต้อง (Validation)
     const { zone } = await this.validateBookingRequest(dto);
 
-    // 2. ตัดสต็อกแบบ Atomic
-    if (dto.seatNumbers && dto.seatNumbers.length > 0) {
-      // 2.1 กรณีระบุที่นั่ง (Seated)
-      if (dto.seatNumbers.length !== dto.quantity) {
+    // 2. จัดการที่นั่งและสต็อกแบบ Atomic (Execution)
+    await this.handleSeatAllocation(dto);
+
+    // 3. บันทึกข้อมูลการจอง (Persistence)
+    const totalPrice = zone.price * dto.quantity;
+    return this.saveBookingRecord(userId, dto, totalPrice);
+  }
+
+  /**
+   * ตรวจสอบความพร้อมของกิจกรรมและโซนที่เลือก
+   */
+  private async validateBookingRequest(dto: CreateBookingDto) {
+    const event = await this.eventModel.findById(dto.eventId).exec();
+    if (!event) throw new NotFoundException('ไม่พบกิจกรรมที่ระบุ');
+
+    // ตรวจสอบวันเวลา
+    if (new Date(event.date) < new Date()) {
+      throw new BadRequestException('กิจกรรมนี้สิ้นสุดลงแล้ว ไม่สามารถจองได้');
+    }
+
+    // ตรวจสอบจำนวนตั๋ว
+    if (dto.quantity <= 0) {
+      throw new BadRequestException('จำนวนที่จองต้องมากกว่า 0');
+    }
+
+    // ตรวจสอบความถูกต้องของโซน
+    const zone = event.zones.find((z) => z.name === dto.zoneName);
+    if (!zone) throw new BadRequestException('ไม่พบโซนที่เลือกในกิจกรรมนี้');
+
+    // ตรวจสอบจำนวนที่นั่งว่าง
+    if (zone.availableSeats < dto.quantity) {
+      throw new BadRequestException(
+        `ที่นั่งว่างไม่เพียงพอ (คงเหลือ ${zone.availableSeats} ที่นั่ง)`,
+      );
+    }
+
+    return { event, zone };
+  }
+
+  /**
+   * แยก Logic การจัดการที่นั่งระบุเบอร์ และที่นั่งทั่วไป
+   */
+  private async handleSeatAllocation(dto: CreateBookingDto) {
+    const isSpecificSeats = dto.seatNumbers && dto.seatNumbers.length > 0;
+
+    if (isSpecificSeats) {
+      if (dto.seatNumbers?.length !== dto.quantity) {
         throw new BadRequestException('จำนวนที่นั่งที่เลือกไม่ตรงกับจำนวนตั๋ว');
       }
-      await this.reserveSeats(dto.eventId, dto.seatNumbers);
-      // ตัด Available Seats ของโซนด้วย (เพื่อให้ยอดรวมตรงกัน)
-      await this.decreaseAvailableSeats(
-        dto.eventId,
-        dto.zoneName,
-        dto.quantity,
-      );
+      // ล็อกเลขที่นั่งและลดจำนวนสต็อกพร้อมกันแบบ Atomic
+      await this.reserveSpecificSeatsAtomic(dto);
     } else {
-      // 2.2 กรณีไม่ระบุที่นั่ง (Standing / General)
-      await this.decreaseAvailableSeats(
+      // ลดสต็อกที่นั่งทั่วไปแบบ Atomic
+      await this.decreaseAvailableSeatsAtomic(
         dto.eventId,
         dto.zoneName,
         dto.quantity,
       );
     }
+  }
 
-    // 3. คำนวณราคาและบันทึกข้อมูลการจอง
-    const totalPrice = zone.price * dto.quantity;
+  /**
+   * ล็อกที่นั่งและลดจำนวนสต็อกในโซนนั้นๆ พร้อมกัน (Atomic Update)
+   */
+  private async reserveSpecificSeatsAtomic(dto: CreateBookingDto) {
+    const result = await this.eventModel
+      .updateOne(
+        {
+          _id: dto.eventId,
+          'zones.name': dto.zoneName,
+          seats: {
+            $all: (dto.seatNumbers ?? []).map((no) => ({
+              $elemMatch: { seatNo: no, isAvailable: true },
+            })),
+          },
+        },
+        {
+          // ล็อกที่นั่ง และลด availableSeats ของโซนในคำสั่งเดียว
+          $set: { 'seats.$[elem].isAvailable': false },
+          $inc: { 'zones.$.availableSeats': -dto.quantity },
+        },
+        {
+          arrayFilters: [{ 'elem.seatNo': { $in: dto.seatNumbers } }],
+        },
+      )
+      .exec();
+
+    if (result.modifiedCount === 0) {
+      throw new BadRequestException(
+        'ขออภัย ที่นั่งบางส่วนถูกจองไปแล้ว หรือข้อมูลไม่ถูกต้อง',
+      );
+    }
+  }
+
+  /**
+   * ลดจำนวนที่นั่งว่างสำหรับโซนยืน/ทั่วไป
+   */
+  private async decreaseAvailableSeatsAtomic(
+    eventId: string,
+    zoneName: string,
+    quantity: number,
+  ) {
+    const result = await this.eventModel
+      .updateOne(
+        {
+          _id: eventId,
+          'zones.name': zoneName,
+          'zones.availableSeats': { $gte: quantity }, // เช็คสต็อกอีกครั้งก่อนหัก
+        },
+        {
+          $inc: { 'zones.$.availableSeats': -quantity },
+        },
+      )
+      .exec();
+
+    if (result.modifiedCount === 0) {
+      throw new BadRequestException('ขออภัย ที่นั่งว่างไม่เพียงพอในขณะนี้');
+    }
+  }
+
+  /**
+   * บันทึกข้อมูลการจองลง MongoDB
+   */
+  private async saveBookingRecord(
+    userId: string,
+    dto: CreateBookingDto,
+    totalPrice: number,
+  ) {
     const newBooking = new this.bookingModel({
       userId,
       eventId: dto.eventId,
@@ -62,90 +167,7 @@ export class BookingsService {
     return await newBooking.save();
   }
 
-  private async reserveSeats(eventId: string, seatNumbers: string[]) {
-    // ใช้ updateOne + arrayFilters เพื่อ update หลาย element ใน array เดียวกัน (MongoDB feature)
-    // แต่เพื่อความง่ายและ Atomic:
-    // เราจะเช็คว่าที่นั่งทั้งหมดว่างอยู่ไหม และ update ทีเดียว
-
-    // 1. เช็คและ Lock ที่นั่ง (Optimistic Concurrency Control)
-    const result = await this.eventModel.updateOne(
-      {
-        _id: eventId,
-        seats: {
-          $all: seatNumbers.map((no) => ({
-            $elemMatch: { seatNo: no, isAvailable: true },
-          })),
-        },
-      },
-      {
-        $set: { 'seats.$[elem].isAvailable': false },
-      },
-      {
-        arrayFilters: [{ 'elem.seatNo': { $in: seatNumbers } }],
-      },
-    );
-
-    if (result.modifiedCount === 0) {
-      throw new BadRequestException(
-        'ขออภัย ที่นั่งที่คุณเลือกถูกจองไปแล้ว หรือข้อมูลไม่ถูกต้อง',
-      );
-    }
-  }
-
-  // --- Helpers / Private Methods (ช่วยให้โค้ดหลักอ่านง่าย) ---
-
-  private async validateBookingRequest(dto: CreateBookingDto) {
-    const event = await this.eventModel.findById(dto.eventId);
-    if (!event) throw new NotFoundException('ไม่พบกิจกรรมที่ระบุ');
-
-    // เช็ควันเวลา
-    if (new Date(event.date) < new Date()) {
-      throw new BadRequestException('กิจกรรมนี้สิ้นสุดลงแล้ว ไม่สามารถจองได้');
-    }
-
-    // เช็คจำนวน
-    if (dto.quantity <= 0) {
-      throw new BadRequestException('จำนวนที่จองต้องมากกว่า 0');
-    }
-
-    // เช็คโซนและที่นั่ง
-    const zone = event.zones.find((z) => z.name === dto.zoneName);
-    if (!zone) throw new BadRequestException('ไม่พบโซนที่เลือกในกิจกรรมนี้');
-
-    if (zone.availableSeats < dto.quantity) {
-      throw new BadRequestException(
-        `ที่นั่งว่างไม่เพียงพอ (คงเหลือ ${zone.availableSeats} ที่นั่ง)`,
-      );
-    }
-
-    return { event, zone };
-  }
-
-  private async decreaseAvailableSeats(
-    eventId: string,
-    zoneName: string,
-    quantity: number,
-  ) {
-    const result = await this.eventModel.updateOne(
-      {
-        _id: eventId,
-        'zones.name': zoneName,
-        'zones.availableSeats': { $gte: quantity }, // เพิ่มเงื่อนไข: ต้องมีที่นั่งว่าง >= จำนวนที่จอง
-      },
-      {
-        $inc: { 'zones.$.availableSeats': -quantity },
-      },
-    );
-
-    // ถ้า nModified เป็น 0 แสดงว่าเงื่อนไขไม่ตรง (ที่นั่งอาจจะเพิ่งเต็มไปตอนที่เรากำลังจะหัก)
-    if (result.modifiedCount === 0) {
-      throw new BadRequestException('ขออภัย ที่นั่งว่างไม่เพียงพอในขณะนี้');
-    }
-
-    return result;
-  }
-
-  // --- Public Queries ---
+  // --- Public Queries (โครงสร้าง Response เดิมสำหรับหน้าบ้าน) ---
 
   async findByUser(userId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
@@ -175,11 +197,9 @@ export class BookingsService {
       throw new BadRequestException('สถานะไม่ถูกต้อง');
     }
 
-    const updatedBooking = await this.bookingModel.findByIdAndUpdate(
-      bookingId,
-      { status },
-      { new: true },
-    );
+    const updatedBooking = await this.bookingModel
+      .findByIdAndUpdate(bookingId, { status }, { new: true })
+      .exec();
 
     if (!updatedBooking) throw new NotFoundException('ไม่พบรายการจองที่ระบุ');
 
@@ -189,7 +209,6 @@ export class BookingsService {
   async findAllForAdmin(page: number, limit: number) {
     const skip = (page - 1) * limit;
 
-    // ใช้ Promise.all เพื่อให้รัน Query พร้อมกัน (ประสิทธิภาพดีกว่า)
     const [data, total] = await Promise.all([
       this.bookingModel
         .find()

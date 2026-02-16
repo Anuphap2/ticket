@@ -1,42 +1,36 @@
-/* eslint-disable @typescript-eslint/require-await */
+// src/app.module.ts
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 import { EventsModule } from './events/events.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { PaymentsModule } from './payments/payments.module';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
-
 @Module({
   imports: [
-    // 1. โหลด ConfigModule เพื่อให้อ่าน .env ได้
-    ConfigModule.forRoot({
-      isGlobal: true, // ทำให้ใช้ได้ทุก Module โดยไม่ต้อง import ซ้ำ
-    }),
+    // 1. ตั้งค่า Config แบบ Global
+    ConfigModule.forRoot({ isGlobal: true }),
 
-    // 2. ใช้ forRootAsync เพื่อรอให้ ConfigService โหลดค่าเสร็จก่อน
+    // 2. เชื่อมต่อฐานข้อมูลโดยดึงค่าจาก Environment
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('DB'), // ดึงค่าจากตัวแปร DB ใน .env
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('DB'),
       }),
+      inject: [ConfigService],
     }),
+
+    // 3. รวม Modules ทั้งหมด
     AuthModule,
+    UsersModule,
     EventsModule,
     BookingsModule,
     PaymentsModule,
-
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'), // โฟลเดอร์เก็บรูป
-      serveRoot: '/uploads', // เข้าถึงผ่าน localhost:3000/uploads
-    }),
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

@@ -1,4 +1,3 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentsService } from './payments.service';
 import { BadRequestException } from '@nestjs/common';
@@ -34,8 +33,12 @@ describe('PaymentsService', () => {
     });
 
     it('should throw BadRequestException if amount is <= 0', async () => {
-      await expect(service.createPaymentIntent(0)).rejects.toThrow(BadRequestException);
-      await expect(service.createPaymentIntent(-100)).rejects.toThrow(BadRequestException);
+      await expect(service.createPaymentIntent(0)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.createPaymentIntent(-100)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

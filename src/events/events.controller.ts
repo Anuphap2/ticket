@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+// src/events/events.controller.ts
 import {
   Controller,
   Get,
@@ -18,50 +18,29 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Events')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly configService: ConfigService,
+  ) {}
 
-  @ApiOperation({ summary: 'Get all events' })
-  @ApiResponse({ status: 200, description: 'Return all events.' })
   @Get()
   findAll() {
     return this.eventsService.findAll();
   }
 
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Upload event image (Admin only)' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 201, description: 'Image uploaded successfully.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @Post('upload')
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -72,98 +51,74 @@ export class EventsController {
           cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
         },
       }),
-      fileFilter: (req, file, cb) => {
-        if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/i)) {
-          return cb(
-            new BadRequestException('อนุญาตเฉพาะไฟล์รูปภาพเท่านั้น!'),
-            false,
-          );
-        }
-        cb(null, true);
-      },
     }),
   )
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Query('eventId') eventId?: string,
   ) {
-    if (!file) {
-      throw new BadRequestException('ไม่พบไฟล์ที่อัปโหลด');
-    }
+    if (!file) throw new BadRequestException('ไม่พบไฟล์ที่อัปโหลด');
 
+    // ถ้ามีการส่ง eventId มาพร้อมการอัพโหลด (เช่น หน้าแก้ไข) ให้ลบรูปเก่าทิ้งก่อน
     if (eventId) {
-      try {
-        const event = await this.eventsService.findOne(eventId);
-
-        if (event && event.imageUrl) {
-          const fileName = event.imageUrl.split('/').pop();
-
-          // 🎯 เช็คว่า fileName มีค่าจริงๆ ก่อนเอาไป join path
-          if (fileName) {
-            const filePath = join(process.cwd(), 'uploads', fileName);
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error ระหว่างลบไฟล์:', error.message);
-      }
+      await this.handleOldImageCleanup(eventId);
     }
 
-    const baseUrl = process.env.BACKEND_URL;
-    return {
-      url: `${baseUrl}/uploads/${file.filename}`,
-    };
+    const baseUrl =
+      this.configService.get<string>('BACKEND_URL') || 'http://localhost:3000';
+    return { url: `${baseUrl}/uploads/${file.filename}` };
   }
 
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a new event (Admin only)' })
-  @ApiResponse({ status: 201, description: 'Event created successfully.' })
+  @Post()
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Post()
   create(@Body() dto: CreateEventDto) {
     return this.eventsService.create(dto);
   }
 
-  @ApiOperation({ summary: 'Get event by ID' })
-  @ApiResponse({ status: 200, description: 'Return the event.' })
-  @ApiResponse({ status: 404, description: 'Event not found.' })
+  @Patch(':id')
+  @Roles('admin')
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  async update(@Param('id') id: string, @Body() dto: Partial<CreateEventDto>) {
+    // 🎯 แก้ไขให้รูปทับของเก่า: ถ้ามีการอัปเดต URL รูปภาพใหม่ ให้ลบไฟล์รูปเก่าในเครื่องทิ้ง
+    if (dto.imageUrl) {
+      await this.handleOldImageCleanup(id);
+    }
+    return this.eventsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles('admin')
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  async remove(@Param('id') id: string) {
+    // 🎯 ตอนลบข้อมูลให้ลบรูปไปด้วย: ลบไฟล์ในเครื่องก่อนลบข้อมูลใน DB
+    await this.handleOldImageCleanup(id);
+    return this.eventsService.remove(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);
   }
 
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update event (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Event updated successfully.' })
-  @Roles('admin')
-  @UseGuards(AccessTokenGuard, RolesGuard)
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.eventsService.update(id, dto);
-  }
-
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete event (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Event deleted successfully.' })
-  @Roles('admin')
-  @UseGuards(AccessTokenGuard, RolesGuard)
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    const event = await this.eventsService.findOne(id);
-    if (event && event.imageUrl) {
-      const fileName = event.imageUrl.split('/').pop();
-
-      // 🎯 ใส่เช็ค fileName เหมือนกันครับ
-      if (fileName) {
-        const filePath = join(process.cwd(), 'uploads', fileName);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
+  /**
+   * Helper สำหรับลบไฟล์รูปภาพออกจากโฟลเดอร์ uploads
+   */
+  private async handleOldImageCleanup(eventId: string) {
+    try {
+      const event = await this.eventsService.findOne(eventId);
+      if (event?.imageUrl) {
+        const fileName = event.imageUrl.split('/').pop();
+        if (fileName) {
+          const filePath = join(process.cwd(), 'uploads', fileName);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`🗑️ ลบไฟล์รูปภาพเก่าเรียบร้อย: ${fileName}`);
+          }
         }
       }
+    } catch (error) {
+      console.error('⚠️ Cleanup error:', error.message);
     }
-    return this.eventsService.remove(id);
   }
 }

@@ -1,7 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
+// src/events/events.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -17,20 +14,19 @@ export class EventsService {
   // 1. สร้างกิจกรรมใหม่
   async create(dto: CreateEventDto): Promise<Event> {
     const eventData = {
-      ...dto, // 🎯 ใช้การกระจายค่า dto แบบนี้จะทำให้ field 'seats' ถูกส่งไปด้วย
+      ...dto,
       zones: dto.zones.map((zone) => ({
         ...zone,
-        availableSeats: zone.totalSeats,
+        availableSeats: zone.totalSeats, // ตั้งค่าเริ่มต้นให้เท่ากับ totalSeats
       })),
     };
 
     return new this.eventModel(eventData).save();
   }
 
-  // 2. ดึงข้อมูลกิจกรรมทั้งหมด (เอาเฉพาะที่กำลัง Active)
+  // 2. ดึงข้อมูลกิจกรรมทั้งหมด (เฉพาะที่ Active)
   async findAll(): Promise<Event[]> {
     return this.eventModel.find({ status: 'active' }).sort({ date: 1 }).exec();
-    // .sort({ date: 1 }) คือเรียงจากวันที่ใกล้สุดมาหาไกลสุด
   }
 
   // 3. ดึงข้อมูลกิจกรรมเดียว
@@ -40,19 +36,20 @@ export class EventsService {
     return event;
   }
 
-  // 4. แก้ไขข้อมูลกิจกรรม
-  async update(id: string, dto: any): Promise<Event> {
-    // 🎯 ถ้ามีการแก้ zones เราต้องคำนวณ availableSeats ใหม่ (กรณีเพิ่ม/ลด totalSeats)
-    if (dto.zones) {
-      dto.zones = dto.zones.map((zone) => ({
+  // 4. แก้ไขข้อมูลกิจกรรม (กำจัด any)
+  async update(id: string, dto: Partial<CreateEventDto>): Promise<Event> {
+    const updateData = { ...dto };
+
+    if (updateData.zones) {
+      updateData.zones = updateData.zones.map((zone) => ({
         ...zone,
-        // ถ้าเป็นของใหม่ที่ยังไม่มี availableSeats ให้ตั้งค่าเริ่มต้น
+        // ถ้าเป็นโซนใหม่ให้ใช้ totalSeats ถ้ามี availableSeats เดิมอยู่แล้วให้คงไว้
         availableSeats: zone.availableSeats ?? zone.totalSeats,
       }));
     }
 
     const updatedEvent = await this.eventModel
-      .findByIdAndUpdate(id, { $set: dto }, { new: true })
+      .findByIdAndUpdate(id, { $set: updateData }, { new: true })
       .exec();
 
     if (!updatedEvent)
@@ -60,7 +57,7 @@ export class EventsService {
     return updatedEvent;
   }
 
-  // 5. ลบกิจกรรม (หรือเปลี่ยนสถานะเป็น deleted แทนการลบจริง)
+  // 5. ลบกิจกรรม
   async remove(id: string) {
     const result = await this.eventModel.findByIdAndDelete(id).exec();
     if (!result) throw new NotFoundException('ไม่พบกิจกรรมที่ต้องการลบ');
