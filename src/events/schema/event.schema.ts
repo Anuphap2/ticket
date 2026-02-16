@@ -20,7 +20,7 @@ export class Event {
   @Prop()
   imageUrl: string;
 
-  // เขียนเป็น Array ของ Object ตรงๆ ไปเลย ไม่ต้องสร้าง class Zone แยก
+  // 🎯 ยุบรวมทุกอย่างใน zones เป็น Array ของ Object เดียวจบ
   @Prop({
     type: [
       {
@@ -28,6 +28,13 @@ export class Event {
         price: Number,
         totalSeats: Number,
         availableSeats: Number,
+        type: {
+          type: String,
+          enum: ['seated', 'standing'],
+          default: 'standing',
+        },
+        rows: Number, // จะมีค่าเฉพาะตอนเป็น 'seated'
+        seatsPerRow: Number, // จะมีค่าเฉพาะตอนเป็น 'seated'
       },
     ],
     default: [],
@@ -37,23 +44,18 @@ export class Event {
   @Prop({ default: 'active' })
   status: string;
 
-  @Prop({ enum: ['seated', 'standing'], default: 'standing' })
-  type: string;
-
-  @Prop()
-  rows: number; // เช่น 10 แถว
-
-  @Prop()
-  seatsPerRow: number; // เช่น แถวละ 10 ที่นั่ง
-
-  // หรือถ้าจะเก็บสถานะที่นั่งแบบละเอียด
-  @Prop([
-    {
-      seatNo: String,
-      isAvailable: { type: Boolean, default: true },
-    },
-  ])
-  seats: { seatNo: string; isAvailable: boolean }[];
+  // เก็บสถานะที่นั่งแบบละเอียด (Optional)
+  @Prop({
+    type: [
+      {
+        seatNo: String,
+        isAvailable: { type: Boolean, default: true },
+        zoneName: String,
+      },
+    ],
+    default: [],
+  })
+  seats: any[];
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);

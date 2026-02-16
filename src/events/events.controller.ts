@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Controller,
@@ -25,12 +22,19 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 
 @ApiTags('Events')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) { }
+  constructor(private readonly eventsService: EventsService) {}
 
   @ApiOperation({ summary: 'Get all events' })
   @ApiResponse({ status: 200, description: 'Return all events.' })
@@ -93,10 +97,13 @@ export class EventsController {
 
         if (event && event.imageUrl) {
           const fileName = event.imageUrl.split('/').pop();
-          const filePath = join(process.cwd(), 'uploads', fileName);
 
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+          // 🎯 เช็คว่า fileName มีค่าจริงๆ ก่อนเอาไป join path
+          if (fileName) {
+            const filePath = join(process.cwd(), 'uploads', fileName);
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
           }
         }
       } catch (error) {
@@ -104,7 +111,7 @@ export class EventsController {
       }
     }
 
-    const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+    const baseUrl = process.env.BACKEND_URL;
     return {
       url: `${baseUrl}/uploads/${file.filename}`,
     };
@@ -148,8 +155,14 @@ export class EventsController {
     const event = await this.eventsService.findOne(id);
     if (event && event.imageUrl) {
       const fileName = event.imageUrl.split('/').pop();
-      const filePath = join(process.cwd(), 'uploads', fileName);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+      // 🎯 ใส่เช็ค fileName เหมือนกันครับ
+      if (fileName) {
+        const filePath = join(process.cwd(), 'uploads', fileName);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
     }
     return this.eventsService.remove(id);
   }
