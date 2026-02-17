@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Schema as MongooseSchema } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type TicketDocument = Ticket & Document;
 
@@ -10,6 +10,9 @@ export class Ticket {
 
   @Prop({ required: true })
   seatNumber: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true })
+  zoneId: Types.ObjectId; // 🎯 เก็บ ID จริงของโซนจาก Event
 
   @Prop({ required: true })
   zoneName: string;

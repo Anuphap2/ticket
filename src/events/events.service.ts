@@ -11,7 +11,7 @@ export class EventsService {
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
-  ) {}
+  ) { }
 
   // 1. สร้างกิจกรรมใหม่
   async create(dto: CreateEventDto): Promise<Event> {
@@ -47,23 +47,33 @@ export class EventsService {
 
   // 4. แก้ไขข้อมูลกิจกรรม (กำจัด any)
   async update(id: string, dto: Partial<CreateEventDto>): Promise<Event> {
-    const updateData = { ...dto };
+    // 1. ดึงข้อมูล "ก่อนแก้" มาจาก DB จริงๆ
+    const oldEvent = await this.eventModel.findById(id).lean().exec(); // 🎯 ใช้ .lean() เพื่อให้ได้ plain object
+    if (!oldEvent) throw new NotFoundException('ไม่พบกิจกรรม');
 
-    if (updateData.zones) {
-      updateData.zones = updateData.zones.map((zone) => ({
-        ...zone,
-        // ถ้าเป็นโซนใหม่ให้ใช้ totalSeats ถ้ามี availableSeats เดิมอยู่แล้วให้คงไว้
-        availableSeats: zone.availableSeats ?? zone.totalSeats,
-      }));
+    if (dto.zones) {
+      for (const newZone of dto.zones) {
+        // 2. หา Zone เดิมใน DB โดยใช้ _id เทียบ
+        const oldZone = oldEvent.zones.find(
+          (z) => (z as any)._id.toString() === (newZone as any)._id?.toString()
+        );
+
+        // 3. ถ้าเจอชื่อเดิม และชื่อเดิมไม่ตรงกับชื่อใหม่ที่ส่งมา
+        if (oldZone && oldZone.name !== newZone.name) {
+          console.log(`เปลี่ยนจาก ${oldZone.name} -> ${newZone.name}`);
+
+          // 🎯 ส่งชื่อ "oldZone.name" ที่ดึงมาจาก DB จริงๆ ไปที่ TicketsService
+          await this.ticketsService.updateZoneName(id, oldZone.name, newZone.name);
+        }
+      }
     }
 
+    // 4. หลังจากสั่งแก้ Tickets เสร็จค่อยมาแก้ตัว Event
     const updatedEvent = await this.eventModel
-      .findByIdAndUpdate(id, { $set: updateData }, { new: true })
+      .findByIdAndUpdate(id, { $set: dto }, { new: true })
       .exec();
 
-    if (!updatedEvent)
-      throw new NotFoundException('ไม่พบกิจกรรมที่ต้องการแก้ไข');
-    return updatedEvent;
+    return updatedEvent!;
   }
 
   // 5. ลบกิจกรรม

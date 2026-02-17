@@ -43,19 +43,6 @@ export class Event {
 
   @Prop({ default: 'active' })
   status: string;
-
-  // เก็บสถานะที่นั่งแบบละเอียด (Optional)
-  @Prop({
-    type: [
-      {
-        seatNo: String,
-        isAvailable: { type: Boolean, default: true },
-        zoneName: String,
-      },
-    ],
-    default: [],
-  })
-  seats: any[];
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);
