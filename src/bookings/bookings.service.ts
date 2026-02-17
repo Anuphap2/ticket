@@ -25,15 +25,18 @@ export class BookingsService {
    * สร้างรายการจองใหม่ (Logic เชื่อมกับ Tickets Collection)
    */
   async create(userId: string, dto: CreateBookingDto) {
-    // 1. ตรวจสอบความถูกต้องพื้นฐาน
+    // 1. ตรวจสอบความถูกต้องพื้นฐาน (เช่น Event มีจริงไหม, วันที่ยังไม่เลยกำหนด)
     const { zone } = await this.validateBookingRequest(dto);
 
     let reservedTicketIds: string[] = [];
+
+    // ตรวจสอบว่าเป็นโซนระบุที่นั่ง (Seated) หรือโซนยืน (Standing)
+    // โดยเช็คว่ามีการส่ง seatNumbers มาไหม
     const isSpecificSeats = dto.seatNumbers && dto.seatNumbers.length > 0;
 
     // 2. จัดการเลือกตั๋วจาก Tickets Collection
     if (isSpecificSeats) {
-      // 🎯 แก้บั๊ก TS18048: ใช้ ! เพื่อยืนยันว่ามีค่าแน่นอน เพราะเช็ค isSpecificSeats แล้ว
+      // 💺 กรณีโซนระบุที่นั่ง: หาตั๋วตามเลขที่ User จิ้มมา
       const tickets = await this.ticketsService.findSpecificTickets(
         dto.eventId,
         dto.zoneName,
@@ -42,11 +45,12 @@ export class BookingsService {
 
       if (tickets.length !== dto.seatNumbers!.length) {
         throw new BadRequestException(
-          'ที่นั่งบางส่วนไม่ว่างหรือไม่มีอยู่ในระบบ',
+          'ที่นั่งบางส่วนถูกจองไปแล้ว หรือไม่มีอยู่ในระบบ',
         );
       }
       reservedTicketIds = tickets.map((t) => (t as any)._id.toString());
     } else {
+      // 💃 กรณีโซนยืน: ระบบ "สุ่มหยิบ" ตั๋วที่ว่าง (available) มาให้ตามจำนวน (quantity)
       const tickets = await this.ticketsService.findAvailableTickets(
         dto.eventId,
         dto.zoneName,
@@ -54,22 +58,37 @@ export class BookingsService {
       );
 
       if (tickets.length < dto.quantity) {
-        throw new BadRequestException('ขออภัย ที่นั่งว่างในโซนนี้ไม่เพียงพอ');
+        throw new BadRequestException('ขออภัย จำนวนตั๋วว่างในโซนนี้ไม่เพียงพอ');
       }
       reservedTicketIds = tickets.map((t) => (t as any)._id.toString());
     }
 
-    // 3. เปลี่ยนสถานะตั๋วรายใบ
-    await this.ticketsService.reserveTickets(reservedTicketIds, userId);
-
-    // 4. หักสต็อกยอดรวมใน Event แบบ Atomic
-    await this.decreaseAvailableSeatsAtomic(
+    // 🎯 3. ล็อคตั๋วรายใบ (Atomic Update)
+    // ขั้นตอนนี้สำคัญมาก เพื่อป้องกันคนสองคนกดจองตั๋วใบเดียวกันพร้อมกัน
+    await this.ticketsService.reserveTickets(
+      reservedTicketIds,
+      userId,
       dto.eventId,
-      dto.zoneName,
-      dto.quantity,
     );
 
-    // 5. บันทึกการจอง
+    try {
+      // 🎯 4. หักสต็อกยอดรวมใน Event แบบ Atomic
+      await this.decreaseAvailableSeatsAtomic(
+        dto.eventId,
+        dto.zoneName,
+        dto.quantity,
+      );
+    } catch (error) {
+      // 🛡️ Rollback: ถ้าหักสต็อกที่ Event ไม่สำเร็จ ต้องคืนสถานะตั๋วรายใบเป็น available
+      await this.ticketsService.reserveTickets(
+        reservedTicketIds,
+        null,
+        dto.eventId,
+      ); // หรือฟังก์ชัน cancelReserve
+      throw error;
+    }
+
+    // 5. บันทึกการจองลง Database และคำนวณราคาสุทธิ
     const totalPrice = zone.price * dto.quantity;
     return this.saveBookingRecord(userId, dto, totalPrice, reservedTicketIds);
   }
@@ -171,10 +190,30 @@ export class BookingsService {
   }
 
   async updateStatus(bookingId: string, status: string) {
+    // 1. อัปเดตสถานะการจองก่อน
     const updatedBooking = await this.bookingModel
       .findByIdAndUpdate(bookingId, { status }, { new: true })
+      .populate('tickets') // 🎯 ดึงข้อมูลตั๋วมาด้วยเพื่อเอาเลขที่นั่ง
       .exec();
+
     if (!updatedBooking) throw new NotFoundException('ไม่พบรายการจอง');
+
+    // 🎯 2. เช็คว่าถ้าสถานะที่เปลี่ยนคือ 'paid' หรือ 'confirmed' (หรือคำที่พู่กันใช้)
+    if (status === 'confirmed') {
+      // ดึงเลขที่นั่งออกมา
+      const seatNumbers = (updatedBooking.tickets as any[]).map(
+        (t) => t.seatNumber,
+      );
+
+      // 🚀 สั่งเปลี่ยนตั๋วเป็น SOLD ทันที
+      await this.ticketsService.markAsSold(
+        seatNumbers,
+        updatedBooking.eventId.toString(),
+      );
+
+      console.log(`✅ Tickets for Booking ${bookingId} are now SOLD`);
+    }
+
     return updatedBooking;
   }
 }

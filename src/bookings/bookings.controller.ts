@@ -20,6 +20,8 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import { RolesGuard } from '../auth/guards/roles.guard'; // เพิ่ม RolesGuard
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BookingQueueService } from './booking-queue.service';
+import { TicketsService } from '../tickets/tickets.service';
+
 import {
   ApiTags,
   ApiOperation,
@@ -34,7 +36,8 @@ export class BookingsController {
   constructor(
     private readonly bookingsService: BookingsService,
     private readonly bookingQueueService: BookingQueueService,
-  ) {}
+    private readonly ticketsService: TicketsService,
+  ) { }
 
   // 1. Endpoint สำหรับการจองตั๋ว
   @ApiBearerAuth()
@@ -48,6 +51,12 @@ export class BookingsController {
   @Post()
   async create(@Req() req: any, @Body() dto: CreateBookingDto) {
     const userId = req.user['sub'];
+
+    if (dto.seatNumbers && dto.seatNumbers.length > 0) {
+      // 🎯 ส่ง dto.eventId เพิ่มเข้าไปด้วย
+      await this.ticketsService.reserveTickets(dto.seatNumbers, userId, dto.eventId);
+    }
+
     return this.bookingQueueService.enqueue(userId, dto);
   }
 
@@ -117,5 +126,13 @@ export class BookingsController {
   async confirmBooking(@Param('id') id: string) {
     // เปลี่ยนสถานะเป็น confirmed ใน MongoDB
     return this.bookingsService.updateStatus(id, 'confirmed');
+  }
+
+  @Get('queue-status/:trackingId')
+  // 🎯 ระบุ Type เป็น any หรือ BookingStatus เพื่อเลี่ยง Error TS4053
+  checkStatus(@Param('trackingId') trackingId: string): any {
+    // 🎯 เรียกชื่อฟังก์ชันให้ตรงกับใน Service (คือ getStatus)
+    const result = this.bookingQueueService.getStatus(trackingId);
+    return result;
   }
 }

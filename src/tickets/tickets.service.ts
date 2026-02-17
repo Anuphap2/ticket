@@ -8,7 +8,7 @@ import { CreateTicketDto } from './dto/ticket.dto';
 export class TicketsService {
   constructor(
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
-  ) { }
+  ) {}
 
   // สร้างตั๋วทีละใบ
   async create(createTicketDto: CreateTicketDto) {
@@ -16,24 +16,26 @@ export class TicketsService {
   }
 
   async deleteByEventMany(eventId: string) {
-    return this.ticketModel.deleteMany({ eventId }).exec();
+    return this.ticketModel
+      .deleteMany({ eventId: new Types.ObjectId(eventId) as any })
+      .exec();
   }
 
   // ดึงตั๋วทั้งหมดของ Event นั้นๆ (เอาไว้โชว์ผังที่นั่ง)
   async findByEvent(eventId: string) {
-    return this.ticketModel.find({ eventId }).exec();
+    return this.ticketModel
+      .find({ eventId: new Types.ObjectId(eventId) as any })
+      .exec();
   }
 
   async createMany(eventId: string, zones: any[]) {
     const tickets: any[] = [];
     zones.forEach((zone) => {
-      // ใช้ _id ของโซนที่มาจาก Event (ถ้ามี) หรือใช้ index/id ที่ส่งมา
       const zoneId = zone._id;
-
       for (let i = 1; i <= zone.totalSeats; i++) {
         tickets.push({
           eventId: new Types.ObjectId(eventId),
-          zoneId: new Types.ObjectId(zoneId), // 🎯 เก็บ ID โซนไว้ที่ตั๋ว
+          zoneId: new Types.ObjectId(zoneId),
           zoneName: zone.name,
           seatNumber: `${zone.name}${i}`,
           status: 'available',
@@ -42,16 +44,12 @@ export class TicketsService {
     });
     return this.ticketModel.insertMany(tickets);
   }
-  // src/tickets/tickets.service.ts
 
   async updateZoneName(
     eventId: string,
     oldZoneName: string,
     newZoneName: string,
   ) {
-    // 🎯 ท่านี้คือ: หาตั๋วงานนี้ โซนนี้ แล้วเปลี่ยนทั้งชื่อโซนและเลขที่นั่ง
-    // โดยการตัดชื่อโซนเก่าออก แล้วแปะชื่อโซนใหม่เข้าไปแทนที่ข้างหน้า
-
     const tickets = await this.ticketModel
       .find({
         eventId: new Types.ObjectId(eventId) as any,
@@ -59,11 +57,8 @@ export class TicketsService {
       })
       .exec();
 
-    // วนลูปอัปเดตรายใบเพื่อให้เลขที่นั่งเปลี่ยนตามชื่อโซนใหม่เป๊ะๆ
     const updatePromises = tickets.map((ticket) => {
-      // เช่น "ZoneA1" เปลี่ยนเป็น "VIP1"
       const newSeatNumber = ticket.seatNumber.replace(oldZoneName, newZoneName);
-
       return this.ticketModel.findByIdAndUpdate(ticket._id, {
         $set: {
           zoneName: newZoneName,
@@ -73,7 +68,6 @@ export class TicketsService {
     });
 
     const results = await Promise.all(updatePromises);
-
     return {
       matchedCount: results.length,
       modifiedCount: results.length,
@@ -81,13 +75,9 @@ export class TicketsService {
     };
   }
 
-  // อัปเดตสถานะตั๋ว (ตอนจอง/จ่ายเงินสำเร็จ)
   async updateStatus(id: string, status: string, userId: string | null = null) {
     const updateData: any = { status, userId };
-
-    if (status === 'reserved') {
-      updateData.reservedAt = new Date();
-    }
+    if (status === 'reserved') updateData.reservedAt = new Date();
 
     const ticket = await this.ticketModel.findByIdAndUpdate(id, updateData, {
       new: true,
@@ -96,7 +86,7 @@ export class TicketsService {
     return ticket;
   }
 
-  // 1. หาตั๋วที่ระบุเลขที่นั่ง (สำหรับการจองแบบระบุที่นั่ง)
+  // 1. หาตั๋วที่ระบุเลขที่นั่ง (Seated)
   async findSpecificTickets(
     eventId: string,
     zoneName: string,
@@ -104,15 +94,15 @@ export class TicketsService {
   ) {
     return this.ticketModel
       .find({
-        eventId,
-        zoneName,
+        eventId: new Types.ObjectId(eventId) as any, // 🎯 แก้ปัญหาหาไม่เจอ
+        zoneName: zoneName,
         seatNumber: { $in: seatNumbers },
-        status: 'available',
+        status: { $in: ['available', 'reserved'] },
       })
       .exec();
   }
 
-  // 2. หาตั๋วที่ว่างตามจำนวน (สำหรับบัตรยืน)
+  // 2. หาตั๋วที่ว่างตามจำนวน (Standing)
   async findAvailableTickets(
     eventId: string,
     zoneName: string,
@@ -120,20 +110,48 @@ export class TicketsService {
   ) {
     return this.ticketModel
       .find({
-        eventId,
-        zoneName,
+        eventId: new Types.ObjectId(eventId) as any, // 🎯 แก้ปัญหาหาไม่เจอ
+        zoneName: zoneName,
         status: 'available',
       })
       .limit(quantity)
       .exec();
   }
 
-  // 3. เปลี่ยนสถานะตั๋วเป็นจองแล้ว
-  async reserveTickets(ticketIds: string[], userId: string) {
+  // 3. เปลี่ยนสถานะตั๋วเป็นจองแล้ว (Reserved)
+  async reserveTickets(
+    seatNumbers: string[],
+    userId: string | null,
+    eventId: string,
+  ) {
+    const updateData: any = {
+      status: userId ? 'reserved' : 'available',
+      userId: userId,
+      reservedAt: userId ? new Date() : null,
+    };
+
     return this.ticketModel
       .updateMany(
-        { _id: { $in: ticketIds } },
-        { status: 'reserved', userId, reservedAt: new Date() },
+        {
+          // 🎯 เปลี่ยนจาก _id เป็น seatNumber เพราะเราส่ง "Zone B1" มา
+          seatNumber: { $in: seatNumbers },
+          // 🎯 ต้องใส่ eventId ด้วยเพื่อความชัวร์ว่าไม่ไปทับงานอื่น
+          eventId: new Types.ObjectId(eventId) as any,
+        },
+        { $set: updateData },
+      )
+      .exec();
+  }
+
+  // 🎯 4. เปลี่ยนสถานะตั๋วเป็นขายแล้ว (Sold) - ใช้ตอนจ่ายเงินสำเร็จ
+  async markAsSold(seatNumbers: string[], eventId: string) {
+    return this.ticketModel
+      .updateMany(
+        {
+          seatNumber: { $in: seatNumbers },
+          eventId: new Types.ObjectId(eventId) as any,
+        },
+        { $set: { status: 'sold' } },
       )
       .exec();
   }

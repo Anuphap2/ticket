@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { TicketsService } from '../tickets/tickets.service';
 
 // สร้าง Interface เพื่อให้อ่านง่ายและมี Type Safety
 interface QueueItem {
@@ -27,7 +28,10 @@ export class BookingQueueService {
 
   private readonly CLEANUP_TIMEOUT = 10 * 60 * 1000; // 10 นาที
 
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(
+    private readonly bookingsService: BookingsService,
+    private readonly ticketsService: TicketsService,
+  ) { }
 
   /**
    * 1. เพิ่มข้อมูลเข้าคิว
@@ -36,25 +40,21 @@ export class BookingQueueService {
     const trackingId = `${userId}-${Date.now()}`;
     const position = this.queue.length + 1;
 
-    // บันทึกสถานะเริ่มต้น
+    // 🎯 2. ล็อคที่นั่งทันทีที่กดจอง (ก่อนเข้าคิว)
+    // เพื่อให้ที่นั่งเปลี่ยนสถานะเป็น 'reserved' ใน DB ทันที คนอื่นจะได้ไม่เห็นที่ว่าง
+    if (dto.seatNumbers && dto.seatNumbers.length > 0) {
+      await this.ticketsService.reserveTickets(dto.seatNumbers, userId, dto.eventId);  
+    }
+
     this.bookingStatus.set(trackingId, {
       status: 'processing',
       initialPosition: position,
     });
 
     this.queue.push({ trackingId, userId, dto });
+    this.processQueue().catch((err) => this.logger.error('Queue processing error', err));
 
-    // รันกระบวนการเบื้องหลัง (ไม่รอ await เพื่อให้ตอบกลับ User ทันที)
-    this.processQueue().catch((err) =>
-      this.logger.error('Queue processing error', err),
-    );
-
-    return {
-      trackingId,
-      status: 'processing',
-      queuePosition: position,
-      message: `คุณอยู่ในคิวที่ ${position} กรุณารอสักครู่`,
-    };
+    return { trackingId, status: 'processing', queuePosition: position };
   }
 
   /**
@@ -78,11 +78,19 @@ export class BookingQueueService {
   /**
    * 3. จัดการแต่ละรายการในคิว
    */
-  private async handleTask({ trackingId, userId, dto }: QueueItem) {
+  private async handleTask(item: QueueItem) {
+    const { trackingId, userId, dto } = item;
     try {
       const result = await this.bookingsService.create(userId, dto);
       this.finishTask(trackingId, { status: 'success', data: result });
     } catch (error: any) {
+      // 🎯 3. ถ้าคิวล้มเหลว (เช่น Error ระหว่างบันทึก) ต้องคืนที่นั่ง (Rollback)
+      if (dto.seatNumbers && dto.seatNumbers.length > 0) {
+        this.logger.warn(`Rollback tickets for trackingId: ${trackingId}`);
+        // ส่ง userId เป็น null เพื่อเปลี่ยนสถานะกลับเป็น 'available'
+        await this.ticketsService.reserveTickets(dto.seatNumbers, null , dto.eventId);
+      }
+
       this.finishTask(trackingId, { status: 'failed', error: error.message });
     }
   }
@@ -110,13 +118,29 @@ export class BookingQueueService {
       return { status: 'not_found', message: 'ไม่พบข้อมูลหรือเซสชันหมดอายุ' };
     }
 
+    // 🎯 ถ้าจองสำเร็จ (success) ให้เปลี่ยนคำเป็น 'confirmed' และแนบ bookingId ไปให้หน้าบ้าน
+    if (currentStatus.status === 'success') {
+      return {
+        status: 'confirmed', // 🎯 หน้าบ้านรอคำนี้
+        bookingId: currentStatus.data?._id || currentStatus.data?.id,
+        message: 'จองที่นั่งสำเร็จ!',
+        ...currentStatus.data,
+      };
+    }
+
     if (currentStatus.status === 'processing') {
       return this.calculateLivePosition(trackingId, currentStatus);
     }
 
+    if (currentStatus.status === 'failed') {
+      return {
+        ...currentStatus,
+        message: 'การจองไม่สําเร็จ: ' + currentStatus.error,
+      };
+    }
+
     return currentStatus;
   }
-
   /**
    * Helper: คำนวณตำแหน่งล่าสุดในคิว
    */
