@@ -125,10 +125,7 @@ export class BookingsService {
       status: 'pending',
       tickets: ticketIds,
     });
-<<<<<<< HEAD
-    
-=======
->>>>>>> b9d5e0b7ca29dfe2614db907fc4189c047c63681
+
     return await newBooking.save();
   }
 
@@ -149,14 +146,7 @@ export class BookingsService {
     ]);
     return { data, total, page, last_page: Math.ceil(total / limit) };
   }
-<<<<<<< HEAD
-  
-=======
 
-  /**
-   * 🎯 คืนฟังก์ชันสำหรับ Admin ที่หายไป (แก้ Error TS2339)
-   */
->>>>>>> b9d5e0b7ca29dfe2614db907fc4189c047c63681
   async findAllForAdmin(page: number, limit: number) {
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
