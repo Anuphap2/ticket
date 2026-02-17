@@ -45,5 +45,9 @@ export class Booking {
   // เก็บ seatNumbers ไว้เป็น string เผื่อเอาไว้ดูง่ายๆ โดยไม่ต้อง populate
   @Prop({ type: [String], default: [] })
   seatNumbers: string[];
+
+  @Prop({ type: Date })
+expiresAt: Date;
+
 }
 export const BookingSchema = SchemaFactory.createForClass(Booking);

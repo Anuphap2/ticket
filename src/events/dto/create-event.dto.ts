@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsEnum,
   ValidateNested,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -20,6 +21,7 @@ class ZoneDto {
   @ApiProperty({ example: 1000 })
   @IsNumber()
   @IsNotEmpty()
+  @Min(100)
   price: number;
 
   @ApiProperty({ example: 50 })

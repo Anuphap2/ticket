@@ -93,6 +93,49 @@ export class BookingsService {
     return this.saveBookingRecord(userId, dto, totalPrice, reservedTicketIds);
   }
 
+  // ⏱️ ยกเลิกการจองอัตโนมัติ
+private scheduleAutoCancel(bookingId: string) {
+  setTimeout(async () => {
+    const booking = await this.bookingModel
+      .findById(bookingId)
+      .populate('tickets')
+      .exec();
+
+    // ถ้าไม่เจอ หรือสถานะไม่ใช่ pending = ไม่ต้องทำอะไร
+    if (!booking || booking.status !== 'pending') return;
+
+    console.log(`⛔ Auto-cancel booking ${bookingId}`);
+
+    // 1️⃣ คืนตั๋วรายใบให้กลับเป็น available
+    const ticketIds = (booking.tickets as any[]).map((t) =>
+      t._id.toString(),
+    );
+
+    await this.ticketsService.cancelReserve(
+      ticketIds,
+      booking.eventId.toString(),
+    );
+
+    // 2️⃣ คืนจำนวนที่นั่งให้ Event
+    await this.eventModel.updateOne(
+      {
+        _id: booking.eventId,
+        'zones.name': booking.zoneName,
+      },
+      {
+        $inc: { 'zones.$.availableSeats': booking.quantity },
+      },
+    );
+
+    // 3️⃣ เปลี่ยนสถานะ booking เป็น cancelled
+    booking.status = 'cancelled';
+    await booking.save();
+
+    console.log(`♻️ Seats returned for booking ${bookingId}`);
+  },1 * 60 * 1000); // 1 นาที
+}
+
+
   // --- Helper Methods ---
 
   private async validateBookingRequest(dto: CreateBookingDto) {
@@ -130,23 +173,31 @@ export class BookingsService {
   }
 
   private async saveBookingRecord(
-    userId: string,
-    dto: CreateBookingDto,
-    totalPrice: number,
-    ticketIds: string[],
-  ) {
-    const newBooking = new this.bookingModel({
-      userId,
-      eventId: dto.eventId,
-      zoneName: dto.zoneName,
-      quantity: dto.quantity,
-      totalPrice,
-      status: 'pending',
-      tickets: ticketIds,
-    });
+  userId: string,
+  dto: CreateBookingDto,
+  totalPrice: number,
+  ticketIds: string[],
+) {
+  const expiresAt = new Date(Date.now() + 60 * 1000); // ⏱️ 1 นาที
 
-    return await newBooking.save();
-  }
+  const newBooking = new this.bookingModel({
+    userId,
+    eventId: dto.eventId,
+    zoneName: dto.zoneName,
+    quantity: dto.quantity,
+    totalPrice,
+    status: 'pending',
+    tickets: ticketIds,
+    expiresAt,
+  });
+
+  const savedBooking = await newBooking.save();
+
+  // ⏱️ ตั้งเวลา cancel อัตโนมัติ
+  this.scheduleAutoCancel(savedBooking._id.toString());
+
+  return savedBooking;
+}
 
   // --- Queries ---
 
