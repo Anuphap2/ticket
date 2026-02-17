@@ -8,7 +8,7 @@ import { CreateTicketDto } from './dto/ticket.dto';
 export class TicketsService {
   constructor(
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
-  ) {}
+  ) { }
 
   // สร้างตั๋วทีละใบ
   async create(createTicketDto: CreateTicketDto) {
@@ -18,6 +18,23 @@ export class TicketsService {
   // ดึงตั๋วทั้งหมดของ Event นั้นๆ (เอาไว้โชว์ผังที่นั่ง)
   async findByEvent(eventId: string) {
     return this.ticketModel.find({ eventId }).exec();
+  }
+
+  async createMany(eventId: string, zones: any[]) {
+    const tickets: Partial<Ticket>[] = [];
+    // แกะข้อมูลจากแต่ละโซนมาสร้างที่นั่งรายใบ
+    zones.forEach((zone) => {
+      for (let i = 1; i <= zone.totalSeats; i++) {
+        tickets.push({
+          eventId,
+          zoneName: zone.name,
+          seatNumber: `${zone.name}${i}`,
+          status: 'available',
+        });
+      }
+    });
+
+    return this.ticketModel.insertMany(tickets); // ใช้ insertMany จะเร็วกว่าเซฟทีละใบ
   }
 
   // อัปเดตสถานะตั๋ว (ตอนจอง/จ่ายเงินสำเร็จ)

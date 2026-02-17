@@ -4,11 +4,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Event, EventDocument } from './schema/event.schema';
 import { CreateEventDto } from './dto/create-event.dto';
+import { TicketsService } from 'src/tickets/tickets.service';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
+    private ticketsService: TicketsService,
   ) {}
 
   // 1. สร้างกิจกรรมใหม่
@@ -17,11 +19,18 @@ export class EventsService {
       ...dto,
       zones: dto.zones.map((zone) => ({
         ...zone,
-        availableSeats: zone.totalSeats, // ตั้งค่าเริ่มต้นให้เท่ากับ totalSeats
+        availableSeats: zone.totalSeats,
       })),
     };
 
-    return new this.eventModel(eventData).save();
+    // 🎯 2. เซฟ Event ลง DB ก่อนเพื่อเอา _id
+    const savedEvent = await new this.eventModel(eventData).save();
+
+    // 🎯 3. สั่งสร้างตั๋วรายใบ (Tickets) ทันทีโดยใช้ ID ที่เพิ่งได้มา
+    // ส่ง savedEvent.id และข้อมูล zones ไปให้ TicketsService จัดการ
+    await this.ticketsService.createMany(savedEvent.id, dto.zones);
+
+    return savedEvent;
   }
 
   // 2. ดึงข้อมูลกิจกรรมทั้งหมด (เฉพาะที่ Active)
