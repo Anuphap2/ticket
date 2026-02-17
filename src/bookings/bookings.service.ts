@@ -163,7 +163,7 @@ export class BookingsService {
       status: 'pending',
       seatNumbers: dto.seatNumbers || [],
     });
-
+    
     return await newBooking.save();
   }
 
@@ -205,7 +205,7 @@ export class BookingsService {
 
     return updatedBooking;
   }
-
+  
   async findAllForAdmin(page: number, limit: number) {
     const skip = (page - 1) * limit;
 

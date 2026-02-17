@@ -36,5 +36,4 @@ export class Booking {
   @Prop([String])
   seatNumbers: string[];
 }
-
 export const BookingSchema = SchemaFactory.createForClass(Booking);
