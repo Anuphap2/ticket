@@ -17,6 +17,7 @@ import { Booking, BookingDocument } from './schema/booking.shema';
 import { Event, EventDocument } from '../events/schema/event.schema';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { TicketsService } from 'src/tickets/tickets.service';
+import { QueueService } from 'src/queue/queue.service';
 
 @Injectable()
 export class BookingsService {
@@ -28,14 +29,20 @@ export class BookingsService {
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
-  ) { }
+    private queueService: QueueService,
+  ) {}
 
   /**
    * สร้างรายการจองใหม่ (Logic เชื่อมกับ Tickets Collection)
    */
   async create(userId: string, dto: CreateBookingDto) {
     // 1. ตรวจสอบข้อมูล และดึง Object ของ Zone มาจาก Event ใน DB จริงๆ
+    const myQueue = await this.queueService.findOneByUser(userId, dto.eventId);
     const { zone } = await this.validateBookingRequest(dto);
+
+    if (!myQueue || myQueue.status !== 'active') {
+      throw new BadRequestException('ยังไม่ถึงคิวของคุณ หรือคิวหมดอายุแล้ว');
+    }
 
     // 🎯 ดึง ID ที่แท้จริงของโซนจาก DB มาใช้ (ห้ามสร้างใหม่เอง)
     const zoneId = zone._id.toString();
@@ -77,7 +84,11 @@ export class BookingsService {
     }
 
     // 3. ล็อคตั๋วรายใบใน Tickets Collection
-    await this.ticketsService.reserveTickets(reservedTicketIds, userId, dto.eventId);
+    await this.ticketsService.reserveTickets(
+      reservedTicketIds,
+      userId,
+      dto.eventId,
+    );
 
     try {
       // 🎯 4. หักสต็อกยอดรวมใน Event (ทำทั้งคู่เพื่อให้เลขหน้าเว็บขยับ)
@@ -122,25 +133,34 @@ export class BookingsService {
       try {
         // 1️⃣ คืนสถานะตั๋วรายใบ (Tickets Collection)
         const ticketIds = booking.tickets.map((t) => t.toString());
-        await this.ticketsService.cancelReserve(ticketIds, booking.eventId.toString());
+        await this.ticketsService.cancelReserve(
+          ticketIds,
+          booking.eventId.toString(),
+        );
 
         // 2️⃣ 🎯 คืนสต็อกโดยใช้ arrayFilters เพื่อความแม่นยำ (ขาคืน)
-        const updateResult = await this.eventModel.updateOne(
-          { _id: booking.eventId }, // Filter แค่ Event ID
-          {
-            // สั่งบวกคืนในโซนที่กำหนดผ่านตัวแปร targetZone
-            $inc: { 'zones.$[targetZone].availableSeats': booking.quantity }
-          },
-          {
-            // นิยามว่า targetZone คือโซนที่มี _id ตรงกับที่เซฟไว้ใน Booking
-            arrayFilters: [{ 'targetZone._id': booking.zoneId }],
-          }
-        ).exec();
+        const updateResult = await this.eventModel
+          .updateOne(
+            { _id: booking.eventId }, // Filter แค่ Event ID
+            {
+              // สั่งบวกคืนในโซนที่กำหนดผ่านตัวแปร targetZone
+              $inc: { 'zones.$[targetZone].availableSeats': booking.quantity },
+            },
+            {
+              // นิยามว่า targetZone คือโซนที่มี _id ตรงกับที่เซฟไว้ใน Booking
+              arrayFilters: [{ 'targetZone._id': booking.zoneId }],
+            },
+          )
+          .exec();
 
         if (updateResult.modifiedCount > 0) {
-          console.log(`♻️ Stock (+${booking.quantity}) returned successfully to ${booking.zoneName}`);
+          console.log(
+            `♻️ Stock (+${booking.quantity}) returned successfully to ${booking.zoneName}`,
+          );
         } else {
-          console.warn(`⚠️ Could not return stock. Zone ID ${booking.zoneId} might not match.`);
+          console.warn(
+            `⚠️ Could not return stock. Zone ID ${booking.zoneId} might not match.`,
+          );
         }
 
         // 3️⃣ เปลี่ยนสถานะรายการจองเป็น cancelled
@@ -148,7 +168,6 @@ export class BookingsService {
           { _id: bookingId },
           { $set: { status: 'cancelled' } },
         );
-
       } catch (err) {
         console.error(`🔥 Error during auto-cancel for ${bookingId}:`, err);
       }
@@ -185,18 +204,20 @@ export class BookingsService {
         { _id: eventId }, // หา Event ให้เจอ
         {
           // 🎯 บอกว่า "ให้ลบค่าในโซนที่ชื่อว่า 'targetZone'"
-          $inc: { 'zones.$[targetZone].availableSeats': -quantity }
+          $inc: { 'zones.$[targetZone].availableSeats': -quantity },
         },
         {
           // 🎯 นิยามว่า 'targetZone' คือตัวที่มี _id ตรงกับ ZoneId ที่ส่งมา
           arrayFilters: [{ 'targetZone._id': ZoneId }],
-        }
+        },
       )
       .exec();
 
     if (result.modifiedCount === 0) {
       // ถ้ามันไม่ลด แสดงว่าหา ID ไม่เจอ หรือสต็อกไม่พอจริงๆ
-      throw new BadRequestException('หักสต็อกล้มเหลว: ไม่พบโซนที่ระบุหรือที่นั่งเต็ม');
+      throw new BadRequestException(
+        'หักสต็อกล้มเหลว: ไม่พบโซนที่ระบุหรือที่นั่งเต็ม',
+      );
     }
   }
 
