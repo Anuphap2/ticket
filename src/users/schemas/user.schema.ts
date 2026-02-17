@@ -18,6 +18,18 @@ export class User {
   @Prop({ required: true, select: false })
   passwordHash: string;
 
+  @Prop({ required: true })
+  firstName: string;
+
+  @Prop({ required: true })
+  lastName: string;
+
+  @Prop({ required: true })
+  phone: string;
+
+  @Prop({ required: true, unique: true })
+  nationalIdHash: string;
+
   @Prop({ required: true, default: 'user' })
   role: UserRole;
 

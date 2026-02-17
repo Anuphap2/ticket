@@ -7,6 +7,7 @@ import {
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { AuthDto } from './dto/auth.dto';
+import { UserDto } from '../users/dto/user.dto';
 
 import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
@@ -67,7 +68,7 @@ export class AuthService {
     return { access_token: token };
   }
 
-  async signUp(dto: AuthDto) {
+  async signUp(dto: UserDto) {
     const email = this.normalizeEmail(dto.email);
     const userExists = await this.userService.findByEmail(email);
 
@@ -76,10 +77,16 @@ export class AuthService {
     }
 
     const passwordHash = await argon2.hash(dto.password);
+    const nationalIdHash = await argon2.hash(dto.nationalId);
 
     const newUser = await this.userService.create({
       email,
       passwordHash,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phone: dto.phone,
+      nationalIdHash,
+      
     });
 
     const tokens = await this.signTokens({
@@ -101,13 +108,14 @@ export class AuthService {
       throw new UnauthorizedException('Email or password is incorrect');
 
     const passwordMatch = await argon2.verify(user.passwordHash, dto.password);
-
+  
     if (!passwordMatch) {
       throw new UnauthorizedException('Email or password is incorrect');
     }
     const tokens = await this.signTokens({
       id: String(user._id),
       email: user.email,
+      
       role: user.role,
     });
 

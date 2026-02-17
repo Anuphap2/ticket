@@ -6,6 +6,8 @@ import { AccessTokenGuard } from './guards/access-token.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { UserDto } from 'src/users/dto/user.dto';
+
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -15,9 +17,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User successfully registered.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: AuthDto })
+  @ApiBody({ type: UserDto })
   @Post('signup')
-  signUp(@Body() dto: AuthDto) {
+  signUp(@Body() dto: UserDto) {
     return this.authService.signUp(dto);
   }
 

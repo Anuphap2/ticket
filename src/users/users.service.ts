@@ -23,13 +23,13 @@ export class UsersService {
     return this.user.findById(userId).select('+refreshTokenHash').exec();
   }
 
-  create(data: { email: string; passwordHash: string; role?: UserRole }) {
-    return this.user.create({
-      email: data.email,
-      passwordHash: data.passwordHash,
-      role: data.role || 'user',
-    });
-  }
+  create(data: Partial<User>) {
+  return this.user.create({
+    ...data,
+    role: data.role || 'user',
+  });
+}
+
 
   setRefreshTokenHash(userId: string, refreshTokenHash: string | null) {
     return this.user.updateOne({ _id: userId }, { refreshTokenHash }).exec();

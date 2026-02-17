@@ -57,7 +57,12 @@ describe('AuthService', () => {
   describe('signUp', () => {
     it('should throw BadRequestException if email already in use', async () => {
       mockUsersService.findByEmail.mockResolvedValue({ id: 'existing' });
-      const dto = { email: 'test@example.com', password: 'password' };
+      const dto = {email: 'test@example.com',
+        password: 'password',
+        firstName: 'สมหญิง',
+        lastName: 'ใจดี',
+        phone: '0812345678',
+        nationalId: '1234567890123'};
 
       await expect(service.signUp(dto)).rejects.toThrow(BadRequestException);
     });
@@ -68,6 +73,10 @@ describe('AuthService', () => {
         _id: 'new-user-id',
         email: 'test@example.com',
         role: 'user',
+        firstName: 'สมหญิง',
+        lastName: 'ใจดี',
+        phone: '0812345678',
+        nationalId: '1234567890123',
       });
       mockJwtService.signAsync.mockResolvedValue('token');
       // Mock argon2.hash since we can't easily mock general imports, but actually we rely on real argon2 here? 
@@ -77,9 +86,15 @@ describe('AuthService', () => {
       // Modifying to mock argon2 would require dependency injection of a wrapper or jest.mock.
       // Let's assume real argon2 is fine for now, or use jest.mock at top level.
 
-      const dto = { email: 'test@example.com', password: 'password' };
+      const dto = { 
+        email: 'test@example.com',
+        password: 'password',
+        firstName: 'สมหญิง',
+        lastName: 'ใจดี',
+        phone: '0812345678',
+        nationalId: '1234567890123'
+      };
       const tokens = await service.signUp(dto);
-
       expect(tokens).toEqual({ access_token: 'token', refresh_token: 'token' });
       expect(mockUsersService.setRefreshTokenHash).toHaveBeenCalled();
     });
