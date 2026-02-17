@@ -15,6 +15,9 @@ export class Booking {
   eventId: Event | Types.ObjectId;
 
   @Prop({ required: true })
+  zoneId: string;
+
+  @Prop({ required: true })
   zoneName: string;
 
   @Prop({ required: true })
@@ -47,7 +50,6 @@ export class Booking {
   seatNumbers: string[];
 
   @Prop({ type: Date })
-expiresAt: Date;
-
+  expiresAt: Date;
 }
 export const BookingSchema = SchemaFactory.createForClass(Booking);

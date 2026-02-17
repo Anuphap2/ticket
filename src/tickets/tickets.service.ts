@@ -156,18 +156,17 @@ export class TicketsService {
       .exec();
   }
   async cancelReserve(ticketIds: string[], eventId: string) {
-  return this.ticketModel.updateMany(
-    {
-      _id: { $in: ticketIds },
-      eventId,
-      status: 'reserved',
-    },
-    {
-      status: 'available',
-      userId: null,
-      reservedAt: null,
-    },
-  );
-}
-
+    return this.ticketModel.updateMany(
+      {
+        _id: { $in: ticketIds },
+        eventId,
+        status: 'reserved',
+      },
+      {
+        status: 'available',
+        userId: null,
+        reservedAt: null,
+      },
+    );
+  }
 }

@@ -22,10 +22,10 @@ export class RolesGuard implements CanActivate {
     // ดึงข้อมูลผู้ใช้จากคำขอ
     const req = context.switchToHttp().getRequest();
     const user = req.user as { role?: string } | undefined;
-    console.log('👮 RolesGuard Debug:', {
-      requiredRoles,
-      userInRequest: user,
-    });
+    // console.log('👮 RolesGuard Debug:', {
+    //   requiredRoles,
+    //   userInRequest: user,
+    // });
 
     // ตรวจสอบว่าผู้ใช้มีบทบาทที่จำเป็นหรือไม่
     if (!user?.role) return false;
