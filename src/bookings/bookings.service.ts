@@ -11,27 +11,54 @@ import { Model } from 'mongoose';
 import { Booking, BookingDocument } from './schema/booking.shema';
 import { Event, EventDocument } from '../events/schema/event.schema';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { TicketsService } from 'src/tickets/tickets.service';
 
 @Injectable()
 export class BookingsService {
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
-  ) {}
+    private ticketsService: TicketsService,
+  ) { }
 
   /**
    * สร้างรายการจองใหม่ (Refactored Version)
    */
   async create(userId: string, dto: CreateBookingDto) {
-    // 1. ตรวจสอบเงื่อนไขความถูกต้อง (Validation)
-    const { zone } = await this.validateBookingRequest(dto);
+    // 1. ตรวจสอบกิจกรรมและโซน (Validation เหมือนเดิม)
+    const { event, zone } = await this.validateBookingRequest(dto);
 
-    // 2. จัดการที่นั่งและสต็อกแบบ Atomic (Execution)
-    await this.handleSeatAllocation(dto);
+    // 2. ไปดึงตั๋วที่ว่างจาก Tickets Collection มาล็อคไว้ (ใช้ Logic ใหม่)
+    const tickets = await this.ticketsService.findAvailableTickets(
+      dto.eventId,
+      dto.zoneName,
+      dto.quantity
+    );
 
-    // 3. บันทึกข้อมูลการจอง (Persistence)
+    if (tickets.length < dto.quantity) {
+      throw new BadRequestException('ขออภัย ที่นั่งว่างในระบบไม่เพียงพอ');
+    }
+
+    // 3. เปลี่ยนสถานะตั๋วเป็น 'reserved'
+    const ticketIds = tickets.map(t => (t as any)._id.toString());
+    await this.ticketsService.reserveTickets(ticketIds, userId);
+
+    // 4. ลดจำนวน availableSeats ใน Event (Atomic Update เหมือนเดิมแต่ไม่ต้องยุ่งกับ seats array)
+    await this.decreaseAvailableSeatsAtomic(dto.eventId, dto.zoneName, dto.quantity);
+
+    // 5. บันทึกข้อมูลการจอง โดยเก็บ ID ของตั๋วไว้ด้วย
     const totalPrice = zone.price * dto.quantity;
-    return this.saveBookingRecord(userId, dto, totalPrice);
+    const newBooking = new this.bookingModel({
+      userId,
+      eventId: dto.eventId,
+      zoneName: dto.zoneName,
+      quantity: dto.quantity,
+      totalPrice,
+      status: 'pending',
+      tickets: ticketIds, // ✅ เก็บ ID ตั๋วจริงๆ ไว้ที่นี่
+    });
+
+    return await newBooking.save();
   }
 
   /**

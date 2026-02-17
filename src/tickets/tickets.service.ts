@@ -8,7 +8,7 @@ import { CreateTicketDto } from './dto/ticket.dto';
 export class TicketsService {
   constructor(
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
-  ) { }
+  ) {}
 
   // สร้างตั๋วทีละใบ
   async create(createTicketDto: CreateTicketDto) {
@@ -50,5 +50,31 @@ export class TicketsService {
     });
     if (!ticket) throw new NotFoundException('ไม่พบตั๋วใบนี้');
     return ticket;
+  }
+
+  async findAvailableTickets(
+    eventId: string,
+    zoneName: string,
+    quantity: number,
+  ) {
+    return this.ticketModel
+      .find({
+        eventId,
+        zoneName,
+        status: 'available',
+      })
+      .limit(quantity) // ดึงมาแค่เท่าที่ต้องการ
+      .exec();
+  }
+
+  async reserveTickets(ticketIds: string[], userId: string) {
+    return this.ticketModel.updateMany(
+      { _id: { $in: ticketIds }, status: 'available' },
+      {
+        status: 'reserved',
+        userId,
+        reservedAt: new Date(),
+      },
+    );
   }
 }
