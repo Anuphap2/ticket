@@ -1,107 +1,115 @@
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Test, TestingModule } from '@nestjs/testing';
-import { BookingsService } from './bookings.service';
 import { getModelToken } from '@nestjs/mongoose';
+import { Types } from 'mongoose';
+import { BadRequestException } from '@nestjs/common';
+
+// 🎯 แก้ปัญหา Path src/
+jest.mock('src/tickets/tickets.service', () => require('../tickets/tickets.service'), { virtual: true });
+jest.mock('src/queue/queue.service', () => require('../queue/queue.service'), { virtual: true });
+
+jest.mock('../tickets/tickets.service');
+jest.mock('../queue/queue.service');
+
+import { BookingsService } from './bookings.service';
 import { Booking } from './schema/booking.shema';
 import { Event } from '../events/schema/event.schema';
-import { BadRequestException } from '@nestjs/common';
+import { TicketsService } from '../tickets/tickets.service';
+import { QueueService } from '../queue/queue.service';
 
 describe('BookingsService', () => {
   let service: BookingsService;
-  let bookingModel: any;
-  let eventModel: any;
 
-  const mockBooking = {
-    _id: 'booking-id',
-    userId: 'user-id',
-    eventId: 'event-id',
-    zoneName: 'A',
-    quantity: 2,
-    totalPrice: 200,
-    status: 'confirmed',
-    save: jest.fn(),
+  const mockEventId = new Types.ObjectId().toString();
+  const mockUserId = new Types.ObjectId().toString();
+  const mockZoneId = new Types.ObjectId().toString();
+
+  // 🎯 สร้าง Mock ของ Event ให้คงที่
+  const mockEventData = {
+    _id: mockEventId,
+    title: 'Mock Event',
+    zones: [{ 
+      _id: mockZoneId, 
+      name: 'Zone A', 
+      type: 'standing', 
+      price: 1000, 
+      availableSeats: 10 
+    }]
   };
 
-  const mockEvent = {
-    _id: 'event-id',
-    date: new Date(Date.now() + 86400000).toISOString(), // Future date
-    zones: [
-      { name: 'A', price: 100, availableSeats: 50 },
-    ],
+  const mockBookingModel = jest.fn().mockImplementation((dto) => ({
+    ...dto,
+    save: jest.fn().mockResolvedValue({ ...dto, _id: 'booking_123' }),
+  }));
+
+  // 🎯 ปรับโครงสร้าง Mock Model ให้เรียกใช้ได้หลายรอบไม่พัง
+  const mockEventModel = {
+    findById: jest.fn().mockReturnThis(), // ให้ findById คืนค่าตัวเอง
+    updateOne: jest.fn().mockReturnThis(),
+    exec: jest.fn(), // เดี๋ยวจะไประบุค่าในแต่ละ Test Case
   };
 
-  class MockBookingModel {
-    constructor(private data: any) {
-      Object.assign(this, data);
-    }
-    save = jest.fn().mockResolvedValue(mockBooking);
-    static find = jest.fn().mockReturnValue({
-      populate: jest.fn().mockReturnThis(),
-      sort: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([mockBooking]),
-    });
-    static findByIdAndUpdate = jest.fn().mockResolvedValue(mockBooking);
-    static countDocuments = jest.fn().mockResolvedValue(1);
-  }
+  const mockTicketsService = {
+    findSpecificTickets: jest.fn(),
+    findAvailableTickets: jest.fn(),
+    reserveTickets: jest.fn(),
+    cancelReserve: jest.fn(),
+  };
 
-  const mockEventModelObject = {
-    findById: jest.fn().mockResolvedValue(mockEvent),
-    updateOne: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+  const mockQueueService = {
+    findOneByUser: jest.fn(),
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BookingsService,
-        {
-          provide: getModelToken(Booking.name),
-          useValue: MockBookingModel,
-        },
-        {
-          provide: getModelToken(Event.name),
-          useValue: mockEventModelObject,
-        },
+        { provide: getModelToken(Booking.name), useValue: mockBookingModel },
+        { provide: getModelToken(Event.name), useValue: mockEventModel },
+        { provide: TicketsService, useValue: mockTicketsService },
+        { provide: QueueService, useValue: mockQueueService },
       ],
     }).compile();
 
     service = module.get<BookingsService>(BookingsService);
-    bookingModel = module.get(getModelToken(Booking.name));
-    eventModel = module.get(getModelToken(Event.name));
     jest.clearAllMocks();
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
   describe('create', () => {
-    it('should create a booking', async () => {
-      const dto = {
-        eventId: 'event-id',
-        zoneName: 'A',
-        quantity: 2,
-      };
+    it('ควรโยน Error ถ้ายังไม่ถึงคิว (status ไม่ใช่ active)', async () => {
+      // Mock ให้หา Event เจอเสมอเพื่อผ่านด่าน validate
+      mockEventModel.exec.mockResolvedValue(mockEventData);
+      // Mock คิวให้เป็น waiting
+      mockQueueService.findOneByUser.mockResolvedValue({ status: 'waiting' });
 
-      // Mock internal validation & atomic update
-      // Since create() calls validateBookingRequest and decreaseAvailableSeats internally
-      // and they depend on eventModel.
+      const dto = { eventId: mockEventId, zoneName: 'Zone A', quantity: 1 } as any;
 
-      const result = await service.create('user-id', dto);
-      expect(result).toBeDefined();
-      expect(eventModel.updateOne).toHaveBeenCalled();
+      await expect(service.create(mockUserId, dto)).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequest if seats are not enough (atomic check)', async () => {
-      eventModel.updateOne.mockResolvedValue({ modifiedCount: 0 });
-      const dto = {
-        eventId: 'event-id',
-        zoneName: 'A',
-        quantity: 2,
-      };
+    it('ควรจองสำเร็จสำหรับโซนยืน (Standing) เมื่อมีตั๋วว่าง', async () => {
+      mockEventModel.exec.mockResolvedValue(mockEventData);
+      mockQueueService.findOneByUser.mockResolvedValue({ status: 'active' });
+      mockTicketsService.findAvailableTickets.mockResolvedValue([{ _id: 'ticket_1' }]);
+      mockEventModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
 
-      await expect(service.create('user-id', dto)).rejects.toThrow(BadRequestException);
+      const dto = { eventId: mockEventId, zoneName: 'Zone A', quantity: 1 } as any;
+      const result = await service.create(mockUserId, dto);
+
+      expect(result).toBeDefined();
+      expect(mockTicketsService.reserveTickets).toHaveBeenCalled();
+    });
+
+    it('ควรโยน Error ถ้าตั๋วในโซนนั้นหมดแล้ว', async () => {
+      const soldOutEvent = {
+        ...mockEventData,
+        zones: [{ ...mockEventData.zones[0], availableSeats: 0 }]
+      };
+      mockEventModel.exec.mockResolvedValue(soldOutEvent);
+      mockQueueService.findOneByUser.mockResolvedValue({ status: 'active' });
+
+      const dto = { eventId: mockEventId, zoneName: 'Zone A', quantity: 1 } as any;
+      await expect(service.create(mockUserId, dto)).rejects.toThrow(BadRequestException);
     });
   });
 });
