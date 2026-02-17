@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -120,7 +122,7 @@ export class TicketsService {
 
   // 3. เปลี่ยนสถานะตั๋วเป็นจองแล้ว (Reserved)
   async reserveTickets(
-    seatNumbers: string[],
+    ticketIdsOrNumbers: string[], // รับมาได้ทั้ง ID (โซนยืน) หรือ เลขที่นั่ง (โซนนั่ง)
     userId: string | null,
     eventId: string,
   ) {
@@ -133,10 +135,17 @@ export class TicketsService {
     return this.ticketModel
       .updateMany(
         {
-          // 🎯 เปลี่ยนจาก _id เป็น seatNumber เพราะเราส่ง "Zone B1" มา
-          seatNumber: { $in: seatNumbers },
-          // 🎯 ต้องใส่ eventId ด้วยเพื่อความชัวร์ว่าไม่ไปทับงานอื่น
           eventId: new Types.ObjectId(eventId) as any,
+          $or: [
+            {
+              _id: {
+                $in: ticketIdsOrNumbers
+                  .filter((id) => /^[0-9a-fA-F]{24}$/.test(id))
+                  .map((id) => new Types.ObjectId(id)),
+              },
+            },
+            { seatNumber: { $in: ticketIdsOrNumbers } },
+          ],
         },
         { $set: updateData },
       )
