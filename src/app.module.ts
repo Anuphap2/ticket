@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PaymentsModule } from './payments/payments.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { QueueModule } from './queue/queue.module';
 @Module({
   imports: [
     // 1. ตั้งค่า Config แบบ Global
@@ -31,6 +32,7 @@ import { TicketsModule } from './tickets/tickets.module';
     BookingsModule,
     PaymentsModule,
     TicketsModule,
+    QueueModule,
   ],
   controllers: [AppController],
   providers: [AppService],
