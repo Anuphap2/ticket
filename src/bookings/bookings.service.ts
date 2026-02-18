@@ -295,7 +295,7 @@ export class BookingsService {
   async updateStatus(bookingId: string, status: string) {
     // 1. อัปเดตสถานะการจองก่อน
     const updatedBooking = await this.bookingModel
-      .findByIdAndUpdate(bookingId, { status }, { new: true })
+      .findByIdAndUpdate(bookingId, { status }, { returnDocument: 'after' })
       .populate('tickets') // 🎯 ดึงข้อมูลตั๋วมาด้วยเพื่อเอาเลขที่นั่ง
       .exec();
 

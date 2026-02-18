@@ -26,8 +26,8 @@ export class UserDto {
   @IsString()
   @MinLength(6, { message: 'Password must be at least 6 characters long' })
   password: string;
-  
-  @ApiProperty({ 
+
+  @ApiProperty({
     example: 'สมหญิง',
     description: 'The first name of the user',
   })
@@ -35,13 +35,13 @@ export class UserDto {
   @IsNotEmpty()
   firstName: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'ใจดี',
     description: 'The last name of the user',
   })
   @IsString()
   @IsNotEmpty()
-    lastName: string;
+  lastName: string;
 
   @ApiProperty({
     example: '0812345678',

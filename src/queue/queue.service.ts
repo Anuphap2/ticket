@@ -40,10 +40,29 @@ export class QueueService {
       .exec();
   }
 
+  async findAndActivateQueue(userId: string, eventId: string) {
+    return this.queueModel
+      .findOneAndUpdate(
+        {
+          userId: new Types.ObjectId(userId),
+          eventId: new Types.ObjectId(eventId),
+          status: 'waiting', // 🔍 ค้นหาเฉพาะคิวที่กำลังรออยู่
+        },
+        {
+          $set: { status: 'active' }, // ⚡ เปลี่ยนสถานะเป็น active ทันที
+        },
+        {
+          returnDocument: 'after', // ✅ คืนค่าข้อมูลที่อัปเดตแล้ว (แก้ Warning Mongoose)
+          sort: { createdAt: -1 }, // 🕒 เลือกคิวล่าสุดของ User คนนี้
+        },
+      )
+      .exec();
+  }
+
   // 🎯 3. ฟังก์ชันอัปเดตสถานะ (ที่ BookingQueueService เรียกหา)
   async updateStatus(id: string, status: string) {
     return this.queueModel
-      .findByIdAndUpdate(id, { $set: { status } }, { new: true })
+      .findByIdAndUpdate(id, { $set: { status } }, { returnDocument: 'after' })
       .exec();
   }
 }

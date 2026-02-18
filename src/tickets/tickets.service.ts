@@ -82,7 +82,7 @@ export class TicketsService {
     if (status === 'reserved') updateData.reservedAt = new Date();
 
     const ticket = await this.ticketModel.findByIdAndUpdate(id, updateData, {
-      new: true,
+      returnDocument: 'after',
     });
     if (!ticket) throw new NotFoundException('ไม่พบตั๋วใบนี้');
     return ticket;
