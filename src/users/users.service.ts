@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-
+import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserDoc, UserRole } from './schemas/user.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private user: Model<UserDoc>) {}
+  constructor(@InjectModel(User.name) private user: Model<UserDoc>,) {}
   findByEmail(email: string) {
     return this.user.findOne({ email }).exec();
+
   }
 
   // ใช้ตอน login: ต้องดึง passwordHash และ refreshTokenHash
@@ -34,4 +35,22 @@ export class UsersService {
   setRefreshTokenHash(userId: string, refreshTokenHash: string | null) {
     return this.user.updateOne({ _id: userId }, { refreshTokenHash }).exec();
   }
+
+  async findProfileById(userId: string) {
+  return this.user
+    .findById(userId)
+    .select('-passwordHash -refreshTokenHash -nationalIdHash')
+    .lean();
+  }
+
+  async updateProfile(userId: string, dto: UpdateUserDto) {
+  return this.user
+    .findByIdAndUpdate(
+      userId,
+      { $set: dto },
+      { new: true }
+    )
+    .select('-passwordHash -refreshTokenHash -nationalIdHash');
+  }
+
 }

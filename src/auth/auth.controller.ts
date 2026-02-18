@@ -1,4 +1,4 @@
-import { Controller, Body, Post, UseGuards, Req, Get } from '@nestjs/common';
+import { Controller, Body, Post, UseGuards, Req, Get,Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthDto } from './dto/auth.dto';
 // import { AuthGuard } from '@nestjs/passport';
@@ -7,12 +7,14 @@ import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { UserDto } from 'src/users/dto/user.dto';
+import { UsersService } from 'src/users/users.service';
+import { UpdateUserDto } from 'src/users/dto/update-user.dto';
 
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private authService: AuthService, private usersService: UsersService) { }
 
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User successfully registered.' })
@@ -40,9 +42,12 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @UseGuards(AccessTokenGuard)
   @Get('profile')
-  getProfile(@Req() req) {
-    return req.user;
+  async getProfile(@Req() req) {
+  const userId = req.user.sub;
+  const user = await this.usersService.findProfileById(userId);
+  return user;
   }
+
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Refresh access token' })
@@ -65,4 +70,12 @@ export class AuthController {
     const userId = req.user.sub || req.user.userId;
     return this.authService.logout(userId);
   }
+
+  @UseGuards(AccessTokenGuard)
+  @Patch('profile')
+  async updateProfile(@Req() req, @Body() dto: UpdateUserDto) {
+  const userId = req.user.sub;
+  return this.usersService.updateProfile(userId, dto);
+  }
+
 }
