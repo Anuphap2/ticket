@@ -11,7 +11,7 @@ export class EventsService {
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
-  ) {}
+  ) { }
 
   // 1. สร้างกิจกรรมใหม่
   async create(dto: CreateEventDto): Promise<Event> {
@@ -35,7 +35,10 @@ export class EventsService {
 
   // 2. ดึงข้อมูลกิจกรรมทั้งหมด (เฉพาะที่ Active)
   async findAll(): Promise<Event[]> {
-    return this.eventModel.find({ status: 'active' }).sort({ date: 1 }).exec();
+    return this.eventModel
+      .find({ status: { $in: ['active', 'inactive'] } })
+      .sort({ date: 1 })
+      .exec();
   }
 
   // 3. ดึงข้อมูลกิจกรรมเดียว

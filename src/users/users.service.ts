@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Get, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,6 +12,9 @@ export class UsersService {
 
   }
 
+  findAll() {
+    return this.user.find().exec();
+  }
   // ใช้ตอน login: ต้องดึง passwordHash และ refreshTokenHash
   findByEmailWithSecrets(email: string) {
     return this.user

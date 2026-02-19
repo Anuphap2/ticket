@@ -30,7 +30,7 @@ export class BookingsService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
     private queueService: QueueService,
-  ) {}
+  ) { }
 
   /**
    * สร้างรายการจองใหม่ (Logic เชื่อมกับ Tickets Collection)
@@ -318,5 +318,11 @@ export class BookingsService {
     }
 
     return updatedBooking;
+  }
+
+  async deleteBooking(id: string) {
+    const result = await this.bookingModel.findByIdAndDelete(id).exec();
+    if (!result) throw new NotFoundException('ไม่พบรายการจองที่ต้องการลบ');
+    return { message: 'ลบรายการจองสำเร็จ', id };
   }
 }

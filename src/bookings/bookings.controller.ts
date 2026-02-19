@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   Get,
+  Delete,
   Patch,
   Param,
   Query, // เพิ่ม Query ตรงนี้
@@ -134,5 +135,14 @@ export class BookingsController {
     // 🎯 เรียกชื่อฟังก์ชันให้ตรงกับใน Service (คือ getStatus)
     const result = this.bookingQueueService.getStatus(trackingId);
     return result;
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] ลบรายการจอง' })
+  @Roles('admin')
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.bookingsService.deleteBooking(id);
   }
 }
