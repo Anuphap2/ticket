@@ -121,8 +121,7 @@ export class TicketsService {
   async findSpecificTickets(
     eventId: string,
     zoneName: string,
-    seatNumbers: string[],
-  ) {
+    seatNumbers: string[],) {
     return this.ticketModel
       .find({
         eventId: new Types.ObjectId(eventId) as any, // 🎯 แก้ปัญหาหาไม่เจอ

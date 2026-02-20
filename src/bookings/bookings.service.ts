@@ -36,7 +36,6 @@ export class BookingsService {
    * สร้างรายการจองใหม่ (Logic เชื่อมกับ Tickets Collection)
    */
   async create(userId: string, dto: CreateBookingDto) {
-    // 1. ตรวจสอบข้อมูล และดึง Object ของ Zone มาจาก Event ใน DB จริงๆ
     const myQueue = await this.queueService.findOneByUser(userId, dto.eventId);
     const { zone } = await this.validateBookingRequest(dto);
 
@@ -44,20 +43,16 @@ export class BookingsService {
       throw new BadRequestException('ยังไม่ถึงคิวของคุณ หรือคิวหมดอายุแล้ว');
     }
 
-    // 🎯 ดึง ID ที่แท้จริงของโซนจาก DB มาใช้ (ห้ามสร้างใหม่เอง)
     const zoneId = zone._id.toString();
-    console.log(`🔍 Zone found: ${zone.name} (ID: ${zoneId})`);
-    const zoneType = zone.type; // เก็บ type ไว้เช็ค (standing หรือ seated)
+    const zoneType = zone.type;
 
     let reservedTicketIds: string[] = [];
+    let actualSeatNumbers: string[] = []; // 🎯 สร้างตัวแปรไว้รอเก็บเลขที่นั่ง
     const isSeated = zoneType === 'seated';
 
-    // 2. จัดการเลือกตั๋วจากคอลเลกชัน Tickets
     if (isSeated) {
       if (!dto.seatNumbers || dto.seatNumbers.length === 0) {
-        throw new BadRequestException(
-          'กรุณาระบุเลขที่นั่งสำหรับโซนระบุที่นั่ง',
-        );
+        throw new BadRequestException('กรุณาระบุเลขที่นั่งสำหรับโซนระบุที่นั่ง');
       }
 
       const tickets = await this.ticketsService.findSpecificTickets(
@@ -70,6 +65,7 @@ export class BookingsService {
         throw new BadRequestException('ที่นั่งบางส่วนถูกจองไปแล้ว');
       }
       reservedTicketIds = tickets.map((t) => (t as any)._id.toString());
+      actualSeatNumbers = tickets.map((t) => (t as any).seatNumber); // 🎯 เก็บเลขที่นั่ง
     } else {
       const tickets = await this.ticketsService.findAvailableTickets(
         dto.eventId,
@@ -81,23 +77,13 @@ export class BookingsService {
         throw new BadRequestException('จำนวนตั๋วในโซนยืนไม่เพียงพอ');
       }
       reservedTicketIds = tickets.map((t) => (t as any)._id.toString());
+      actualSeatNumbers = tickets.map((t) => (t as any).seatNumber); // 🎯 เก็บเลขที่นั่ง
     }
 
-    // 3. ล็อคตั๋วรายใบใน Tickets Collection
-    await this.ticketsService.reserveTickets(
-      reservedTicketIds,
-      userId,
-      dto.eventId,
-    );
-
+    // ... (ขั้นตอนที่ 3 และ 4 เรื่องการ reserve และหักสต็อกคงเดิม) ...
+    await this.ticketsService.reserveTickets(reservedTicketIds, userId, dto.eventId);
     try {
-      // 🎯 4. หักสต็อกยอดรวมใน Event (ทำทั้งคู่เพื่อให้เลขหน้าเว็บขยับ)
-      await this.decreaseAvailableSeatsAtomic(
-        dto.eventId,
-        zoneId,
-        dto.quantity,
-      );
-      console.log(`✅ ${isSeated ? 'Seated' : 'Standing'} stock decreased.`);
+      await this.decreaseAvailableSeatsAtomic(dto.eventId, zoneId, dto.quantity);
     } catch (error) {
       await this.ticketsService.cancelReserve(reservedTicketIds, dto.eventId);
       throw error;
@@ -105,13 +91,14 @@ export class BookingsService {
 
     const totalPrice = zone.price * dto.quantity;
 
-    // 5. บันทึก Booking โดยใช้ zoneId ที่ดึงมาจาก Event
+    // 🎯 5. ส่ง actualSeatNumbers ไปด้วย
     return this.saveBookingRecord(
       userId,
       dto,
       totalPrice,
       reservedTicketIds,
       zoneId,
+      actualSeatNumbers,
     );
   }
 
@@ -227,6 +214,7 @@ export class BookingsService {
     totalPrice: number,
     ticketIds: string[],
     ZoneId: string,
+    seatNumbers: string[],
   ) {
     // 🎯 คำนวณเวลาหมดอายุโดยใช้ค่าจากตัวแปรด้านบน
     const expiresAt = new Date(Date.now() + this.EXPIRE_TIME_MS);
@@ -240,6 +228,7 @@ export class BookingsService {
       totalPrice,
       status: 'pending',
       tickets: ticketIds,
+      seatNumbers,
       expiresAt,
     });
 
