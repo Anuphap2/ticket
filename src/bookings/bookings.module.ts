@@ -17,5 +17,6 @@ import { QueueModule } from 'src/queue/queue.module';
   ],
   providers: [BookingsService, BookingQueueService],
   controllers: [BookingsController],
+  exports: [BookingsService],
 })
 export class BookingsModule {}

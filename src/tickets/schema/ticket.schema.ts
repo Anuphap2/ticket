@@ -18,7 +18,7 @@ export class Ticket {
   zoneName: string;
 
   @Prop({
-    required: true,
+    required: false,
     enum: ['available', 'reserved', 'sold'],
     default: 'available',
   })

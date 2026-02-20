@@ -27,6 +27,7 @@ class ZoneDto {
   @ApiProperty({ example: 50 })
   @IsNumber()
   @IsNotEmpty()
+  @Min(1, { message: 'totalSeats must be at least 1' })
   totalSeats: number;
 
   // 🎯 เพิ่ม availableSeats เพื่อรองรับการ Refactor ใน Service

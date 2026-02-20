@@ -4,11 +4,13 @@ import { EventsController } from './events.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Event, EventSchema } from './schema/event.schema';
 import { TicketsModule } from 'src/tickets/tickets.module';
+import { BookingsModule } from 'src/bookings/bookings.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Event.name, schema: EventSchema }]),
     TicketsModule, // นำเข้า TicketsModule เพื่อให้ EventsService ใช้งาน TicketsService ได้
+    BookingsModule, // นำเข้า BookingsModule เพื่อให้ EventsService ใช้งาน BookingsService ได้
   ],
   providers: [EventsService],
   controllers: [EventsController],

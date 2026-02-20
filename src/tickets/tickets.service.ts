@@ -88,28 +88,32 @@ export class TicketsService {
     return ticket;
   }
 
-  async updateZoneSeats(
-    eventId: string,
-    zone: any,
-    startOffset: number,
-    count: number,
-  ) {
-    // ระบุ Type เป็น any[] หรือสร้าง Interface รองรับเพื่อแก้ปัญหา 'never'
+  async updateZoneSeats(eventId: string, zone: any, startOffset: number, count: number) {
     const newTickets: any[] = [];
     const zoneId = zone._id.toString();
 
     for (let i = 1; i <= count; i++) {
       const seatIndex = startOffset + i;
+
+      // 🎯 แก้ไข: ตรวจสอบ zone.type ให้รัดกุม (แนะนำให้แปลงเป็น lowercase ก่อนเช็ค)
+      const isSeated = zone.type?.toLowerCase() === 'seated';
+
+      // หากเป็นโซนยืน (standing) ให้สร้างรหัสที่นั่งจำลองขึ้นมาแทน null 
+      // เพื่อให้ผ่าน validation 'required' ใน Schema
+      const seatNumberValue = isSeated
+        ? `${zone.name}${seatIndex}`
+        : `${zone.name}${seatIndex}`;
+
       newTickets.push({
         eventId: eventId,
-        zoneName: zone.name,
         zoneId: zoneId,
-        seatNumber: zone.type === 'seated' ? `${zone.name}${seatIndex}` : null,
+        zoneName: zone.name,
+        seatNumber: seatNumberValue,
         status: 'available',
       });
     }
 
-    // ใช้ insertMany เพื่อความรวดเร็ว
+    // ใช้ insertMany เพื่อเพิ่มตั๋วปริมาณมาก (เช่น จาก 1 เป็น 100 ใบ) อย่างมีประสิทธิภาพ
     return this.ticketModel.insertMany(newTickets);
   }
 
@@ -143,6 +147,19 @@ export class TicketsService {
       })
       .limit(quantity)
       .exec();
+  }
+
+  async removeAvailableTickets(eventId: string, zoneName: string, count: number) {
+    // หาตั๋วที่ว่าง (available) ในโซนนั้นๆ และลบออกตามจำนวนที่กำหนด
+    // โดยเรียงจากเลขที่นั่งท้ายสุดลงมา (Sort -1)
+    const ticketsToDelete = await this.ticketModel
+      .find({ eventId, zoneName, status: 'available' })
+      .sort({ seatNumber: -1 })
+      .limit(count)
+      .exec();
+
+    const idsToDelete = ticketsToDelete.map(t => t._id);
+    return this.ticketModel.deleteMany({ _id: { $in: idsToDelete } });
   }
 
   // 3. เปลี่ยนสถานะตั๋วเป็นจองแล้ว (Reserved)

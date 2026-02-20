@@ -325,4 +325,9 @@ export class BookingsService {
     if (!result) throw new NotFoundException('ไม่พบรายการจองที่ต้องการลบ');
     return { message: 'ลบรายการจองสำเร็จ', id };
   }
+
+  async deleteByEvent(eventId: string) {
+    // ลบการจองทั้งหมดที่เกี่ยวข้องกับกิจกรรมนี้
+    return this.bookingModel.deleteMany({ eventId: eventId }).exec();
+  }
 }
