@@ -1,5 +1,9 @@
 // src/events/events.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Event, EventDocument } from './schema/event.schema';
@@ -13,7 +17,7 @@ export class EventsService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
     private bookingsService: BookingsService,
-  ) { }
+  ) {}
 
   // 1. สร้างกิจกรรมใหม่
   async create(dto: CreateEventDto): Promise<Event> {
@@ -57,58 +61,81 @@ export class EventsService {
     const oldEvent = await this.eventModel.findById(id).exec();
     if (!oldEvent) throw new NotFoundException('ไม่พบกิจกรรมที่ต้องการแก้ไข');
 
-    // 1. จัดการเรื่องตั๋ว (Tickets) และชื่อโซน
-    if (dto.zones) {
-      for (const newZone of dto.zones) {
-        const oldZone = oldEvent.zones.find(
-          (z) => z._id.toString() === (newZone as any)._id?.toString(),
-        );
-
-        if (oldZone) {
-          // กรณีโซนเดิม: เช็คเปลี่ยนชื่อ
-          if (oldZone.name !== newZone.name) {
-            await this.ticketsService.updateZoneName(id, oldZone.name, newZone.name);
-          }
-
-          // กรณีเปลี่ยนจำนวนที่นั่ง
-          if (oldZone.totalSeats !== newZone.totalSeats) {
-            const diff = newZone.totalSeats - oldZone.totalSeats;
-            if (diff > 0) {
-              await this.ticketsService.updateZoneSeats(id, newZone, oldZone.totalSeats, diff);
-            } else {
-              // กรณีลดที่นั่ง (ส่งค่าบวกของส่วนต่างไปลบออก)
-              await this.ticketsService.removeAvailableTickets(id, newZone.name, Math.abs(diff));
-            }
-          }
-        } else {
-          // กรณีโซนใหม่
-          await this.ticketsService.createMany(id, [newZone]);
-        }
-      }
-    }
-
-    // 2. เตรียมข้อมูลสำหรับอัปเดต Event (availableSeats)
     const updateData = { ...dto };
-    if (updateData.zones) {
-      updateData.zones = updateData.zones.map((zone) => {
-        const oldZone = oldEvent.zones.find(
-          (z) => z._id.toString() === (zone as any)._id?.toString(),
-        );
-        if (oldZone) {
-          const diff = zone.totalSeats - oldZone.totalSeats;
-          return { ...zone, availableSeats: oldZone.availableSeats + diff };
-        }
-        return { ...zone, availableSeats: zone.totalSeats };
-      });
+
+    if (dto.zones) {
+      // ใช้ Promise.all เพื่อให้ทำงานเร็วขึ้นและจัดการ async ภายใน map
+      updateData.zones = await Promise.all(
+        dto.zones.map(async (newZone) => {
+          const oldZone = oldEvent.zones.find(
+            (z) => z._id.toString() === (newZone as any)._id?.toString(),
+          );
+
+          if (oldZone) {
+            // 🎯 1. ดึงจำนวนตั๋วที่ไม่ว่าง (reserved + sold) ของโซนนี้
+            const bookedCount = await this.ticketsService.countBookedTickets(
+              id,
+              oldZone.name,
+            );
+
+            // 🎯 2. เช็คว่าชื่อโซนเปลี่ยนไหม ถ้าเปลี่ยนต้องย้ายชื่อใน Tickets ด้วย
+            if (oldZone.name !== newZone.name) {
+              await this.ticketsService.updateZoneName(
+                id,
+                oldZone.name,
+                newZone.name,
+              );
+            }
+
+            // 🎯 3. จัดการเรื่องจำนวนที่นั่ง
+            if (oldZone.totalSeats !== newZone.totalSeats) {
+              const diff = newZone.totalSeats - oldZone.totalSeats;
+
+              if (diff > 0) {
+                // เพิ่มที่นั่ง: สร้างตั๋วเพิ่มตามส่วนต่าง
+                await this.ticketsService.updateZoneSeats(
+                  id,
+                  newZone,
+                  oldZone.totalSeats,
+                  diff,
+                );
+              } else {
+                // ลดที่นั่ง:
+                // เช็คก่อนว่าจำนวนใหม่ (newTotalSeats) ต้องไม่น้อยกว่าจำนวนที่จองไปแล้ว (bookedCount)
+                if (newZone.totalSeats < bookedCount) {
+                  throw new BadRequestException(
+                    `โซน ${oldZone.name} ไม่สามารถลดที่นั่งให้เหลือ ${newZone.totalSeats} ได้ เพราะมีการจองไปแล้ว ${bookedCount} ที่นั่ง`,
+                  );
+                }
+                // ลบตั๋วที่ยังว่าง (available) ออกตามส่วนต่าง
+                await this.ticketsService.removeAvailableTickets(
+                  id,
+                  newZone.name,
+                  Math.abs(diff),
+                );
+              }
+            }
+
+            // 🎯 4. คำนวณ availableSeats ใหม่ให้แม่นยำ
+            // สูตร: ที่นั่งที่เหลือ = ทั้งหมดใหม่ - ที่จองไปแล้ว
+            return {
+              ...newZone,
+              availableSeats: newZone.totalSeats - bookedCount,
+            };
+          } else {
+            // กรณีเพิ่มโซนใหม่เอี่ยม
+            await this.ticketsService.createMany(id, [newZone]);
+            return { ...newZone, availableSeats: newZone.totalSeats };
+          }
+        }),
+      );
     }
 
-    // 🎯 3. บันทึกและ Return (วางไว้ท้ายสุดเพื่อให้ TypeScript มั่นใจว่ามีการคืนค่าแน่นอน)
     const updatedEvent = await this.eventModel
       .findByIdAndUpdate(id, { $set: updateData }, { returnDocument: 'after' })
       .exec();
 
     if (!updatedEvent) throw new NotFoundException('อัปเดตข้อมูลล้มเหลว');
-
     return updatedEvent;
   }
   // 5. ลบกิจกรรม

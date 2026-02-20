@@ -117,6 +117,14 @@ export class TicketsService {
     return this.ticketModel.insertMany(newTickets);
   }
 
+  async countBookedTickets(eventId: string, zoneName: string): Promise<number> {
+    return this.ticketModel.countDocuments({
+      eventId,
+      zoneName,
+      status: { $in: ['reserved', 'sold'] } // นับทั้งคนที่กำลังจองและคนที่จ่ายเงินแล้ว
+    }).exec();
+  }
+
   // 1. หาตั๋วที่ระบุเลขที่นั่ง (Seated)
   async findSpecificTickets(
     eventId: string,
