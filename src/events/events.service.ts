@@ -53,6 +53,7 @@ export class EventsService {
     const oldEvent = await this.eventModel.findById(id).exec();
     if (!oldEvent) throw new NotFoundException('ไม่พบกิจกรรมที่ต้องการแก้ไข');
 
+    console.log(id);
     if (dto.zones) {
       for (const newZone of dto.zones) {
         // 1. ตรวจสอบว่าเป็นโซนที่มีอยู่เดิม หรือเป็นโซนใหม่

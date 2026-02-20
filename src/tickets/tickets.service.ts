@@ -88,16 +88,22 @@ export class TicketsService {
     return ticket;
   }
 
-  async updateZoneSeats(eventId: string, zone: any, startOffset: number, count: number) {
+  async updateZoneSeats(
+    eventId: string,
+    zone: any,
+    startOffset: number,
+    count: number,
+  ) {
     // ระบุ Type เป็น any[] หรือสร้าง Interface รองรับเพื่อแก้ปัญหา 'never'
     const newTickets: any[] = [];
-
+    const zoneId = zone._id.toString();
+    
     for (let i = 1; i <= count; i++) {
       const seatIndex = startOffset + i;
       newTickets.push({
         eventId: eventId,
         zoneName: zone.name,
-        // รันเลขที่นั่งต่อจากของเดิม
+        zoneId: zoneId,
         seatNumber: zone.type === 'seated' ? `${zone.name}${seatIndex}` : null,
         status: 'available',
       });
