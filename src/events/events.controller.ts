@@ -22,10 +22,20 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
-import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 
-@ApiTags('Events')
+// 🎯 นำเข้า Swagger Decorators ทั้งหมดที่จำเป็น
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiQuery,
+} from '@nestjs/swagger';
+
+@ApiTags('Events') // จัดกลุ่ม API ในหน้า Swagger
 @Controller('events')
 export class EventsController {
   constructor(
@@ -34,13 +44,34 @@ export class EventsController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'ดึงข้อมูลกิจกรรมทั้งหมด' })
+  @ApiResponse({ status: 200, description: 'คืนค่ารายการกิจกรรมทั้งหมดสำเร็จ' })
   findAll() {
     return this.eventsService.findAll();
   }
 
   @Post('upload')
-  @Roles('admin')
+  @ApiBearerAuth() // ระบุว่าต้องใช้ Token
+  @Roles('admin') // จำกัดสิทธิ์เฉพาะ Admin
   @UseGuards(AccessTokenGuard, RolesGuard)
+  @ApiOperation({ summary: 'อัปโหลดรูปภาพกิจกรรม (Admin Only)' })
+  @ApiConsumes('multipart/form-data') // 🎯 สำคัญ: ทำให้ Swagger แสดงปุ่ม Browse ไฟล์
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary', // กำหนดเป็นไฟล์ Binary
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'eventId',
+    required: false,
+    description: 'ID ของกิจกรรมที่ต้องการลบรูปภาพเก่าทิ้ง',
+  })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -59,7 +90,6 @@ export class EventsController {
   ) {
     if (!file) throw new BadRequestException('ไม่พบไฟล์ที่อัปโหลด');
 
-    // ถ้ามีการส่ง eventId มาพร้อมการอัพโหลด (เช่น หน้าแก้ไข) ให้ลบรูปเก่าทิ้งก่อน
     if (eventId) {
       await this.handleOldImageCleanup(eventId);
     }
@@ -70,17 +100,22 @@ export class EventsController {
   }
 
   @Post()
+  @ApiBearerAuth()
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
+  @ApiOperation({ summary: 'สร้างกิจกรรมใหม่ (Admin Only)' })
+  @ApiResponse({ status: 201, description: 'สร้างกิจกรรมสำเร็จ' })
   create(@Body() dto: CreateEventDto) {
     return this.eventsService.create(dto);
   }
 
   @Patch(':id')
+  @ApiBearerAuth()
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
+  @ApiOperation({ summary: 'แก้ไขข้อมูลกิจกรรม (Admin Only)' })
+  @ApiResponse({ status: 200, description: 'อัปเดตข้อมูลสำเร็จ' })
   async update(@Param('id') id: string, @Body() dto: Partial<CreateEventDto>) {
-    // 🎯 แก้ไขให้รูปทับของเก่า: ถ้ามีการอัปเดต URL รูปภาพใหม่ ให้ลบไฟล์รูปเก่าในเครื่องทิ้ง
     if (dto.imageUrl) {
       await this.handleOldImageCleanup(id);
     }
@@ -88,15 +123,20 @@ export class EventsController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
+  @ApiOperation({ summary: 'ลบกิจกรรม (Admin Only)' })
+  @ApiResponse({ status: 200, description: 'ลบข้อมูลและไฟล์รูปภาพสำเร็จ' })
   async remove(@Param('id') id: string) {
-    // 🎯 ตอนลบข้อมูลให้ลบรูปไปด้วย: ลบไฟล์ในเครื่องก่อนลบข้อมูลใน DB
     await this.handleOldImageCleanup(id);
     return this.eventsService.remove(id);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'ดึงข้อมูลกิจกรรมรายรายการ' })
+  @ApiResponse({ status: 200, description: 'คืนค่าข้อมูลกิจกรรม' })
+  @ApiResponse({ status: 404, description: 'ไม่พบกิจกรรมที่ระบุ' })
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);
   }

@@ -97,7 +97,7 @@ export class TicketsService {
     // ระบุ Type เป็น any[] หรือสร้าง Interface รองรับเพื่อแก้ปัญหา 'never'
     const newTickets: any[] = [];
     const zoneId = zone._id.toString();
-    
+
     for (let i = 1; i <= count; i++) {
       const seatIndex = startOffset + i;
       newTickets.push({

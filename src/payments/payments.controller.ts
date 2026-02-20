@@ -1,3 +1,4 @@
+// src/payments/payments.controller.ts
 import {
   Controller,
   Post,
@@ -6,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { AccessTokenGuard } from '../auth/guards/access-token.guard'; // 🎯 นำเข้า Guard
+import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import {
   ApiTags,
   ApiOperation,
@@ -15,32 +16,51 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 
-@ApiTags('Payments')
+@ApiTags('Payments') // จัดกลุ่ม API ในหน้า Swagger
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  @ApiBearerAuth() // 🎯 บอก Swagger ว่าต้องใช้ Token
-  @ApiOperation({ summary: 'Create payment intent' })
-  @ApiResponse({ status: 201, description: 'Payment intent created.' })
+  @ApiBearerAuth() // 🎯 ระบุว่าต้องใส่ Token ในหน้า Swagger เพื่อทดสอบ
+  @ApiOperation({ summary: 'สร้างรายการชำระเงิน (Payment Intent)' })
+  @ApiResponse({
+    status: 201,
+    description:
+      'สร้าง Payment Intent สำเร็จ คืนค่า clientSecret สำหรับ Stripe',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'ข้อมูลไม่ถูกต้อง เช่น ยอดเงินน้อยกว่าหรือเท่ากับ 0',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Token ไม่ถูกต้องหรือหมดอายุ',
+  })
   @ApiBody({
+    description: 'ข้อมูลสำหรับการสร้างยอดชำระเงิน',
     schema: {
       type: 'object',
       properties: {
-        amount: { type: 'number', example: 1000 },
+        amount: {
+          type: 'number',
+          example: 1000,
+          description:
+            'ยอดเงินที่ต้องการชำระ (หน่วยเป็นสตางค์ หรือตามที่ Stripe กำหนด)',
+        },
       },
       required: ['amount'],
     },
   })
-  @UseGuards(AccessTokenGuard) // 🎯 ล็อกไว้ให้เฉพาะคนที่ Login แล้วเท่านั้นที่สร้างยอดจ่ายเงินได้
+  @UseGuards(AccessTokenGuard) // 🎯 ล็อกไว้ให้เฉพาะผู้ที่ Login แล้วเท่านั้น
   @Post('create-intent')
   async create(@Body() body: { amount: number }) {
-    // ตรวจสอบความถูกต้องเบื้องต้น
+    // 1. ตรวจสอบความถูกต้องเบื้องต้น
     if (!body.amount || body.amount <= 0) {
       throw new BadRequestException('ยอดเงินต้องมากกว่า 0');
     }
 
-    // เรียกใช้ Service ที่เรา Refactor ไว้แล้ว (ซึ่งใช้ ConfigService และจัดการ Error ไว้ดีแล้ว)
+    // 2. เรียกใช้ Service เพื่อสร้าง Intent กับ Stripe
+    // ระบบจะดึง API Key จาก ConfigService ให้อัตโนมัติใน Service
     return this.paymentsService.createPaymentIntent(body.amount);
   }
 }

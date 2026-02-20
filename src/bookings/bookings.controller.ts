@@ -13,12 +13,12 @@ import {
   Delete,
   Patch,
   Param,
-  Query, // เพิ่ม Query ตรงนี้
+  Query,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
-import { RolesGuard } from '../auth/guards/roles.guard'; // เพิ่ม RolesGuard
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BookingQueueService } from './booking-queue.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -29,6 +29,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 
 @ApiTags('Bookings')
@@ -38,9 +40,8 @@ export class BookingsController {
     private readonly bookingsService: BookingsService,
     private readonly bookingQueueService: BookingQueueService,
     private readonly ticketsService: TicketsService,
-  ) { }
+  ) {}
 
-  // 1. Endpoint สำหรับการจองตั๋ว
   @ApiBearerAuth()
   @ApiOperation({ summary: 'สร้างรายการจองใหม่ (เข้า Queue)' })
   @ApiResponse({ status: 201, description: 'ส่งคำขอเข้าคิวจองสำเร็จ' })
@@ -48,23 +49,28 @@ export class BookingsController {
     status: 400,
     description: 'ข้อมูลไม่ถูกต้อง หรือที่นั่งไม่พอ',
   })
+  @ApiBody({ type: CreateBookingDto })
   @UseGuards(AccessTokenGuard)
   @Post()
   async create(@Req() req: any, @Body() dto: CreateBookingDto) {
     const userId = req.user['sub'];
 
     if (dto.seatNumbers && dto.seatNumbers.length > 0) {
-      // 🎯 ส่ง dto.eventId เพิ่มเข้าไปด้วย
-      await this.ticketsService.reserveTickets(dto.seatNumbers, userId, dto.eventId);
+      await this.ticketsService.reserveTickets(
+        dto.seatNumbers,
+        userId,
+        dto.eventId,
+      );
     }
 
     return this.bookingQueueService.enqueue(userId, dto);
   }
 
-  // 2. Endpoint สำหรับดูประวัติการจองของตัวเอง
   @ApiBearerAuth()
   @ApiOperation({ summary: 'ดึงรายการจองของตัวเอง' })
-  @ApiResponse({ status: 200, description: 'Return my bookings.' })
+  @ApiResponse({ status: 200, description: 'คืนค่ารายการจองของผู้ใช้' })
+  @ApiQuery({ name: 'page', required: false, example: '1' })
+  @ApiQuery({ name: 'limit', required: false, example: '10' })
   @UseGuards(AccessTokenGuard)
   @Get('myBookings')
   async getMyBookings(
@@ -76,10 +82,15 @@ export class BookingsController {
     return this.bookingsService.findByUser(userId, Number(page), Number(limit));
   }
 
-  // 3. Endpoint สำหรับ Admin อัปเดตสถานะตั๋วรายใบ
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[Admin] ดูประวัติการจองทั้งหมด พร้อมแบ่งหน้า' })
-  @ApiResponse({ status: 200, description: 'Booking status updated.' })
+  @ApiOperation({ summary: '[Admin] อัปเดตสถานะการจอง' })
+  @ApiResponse({ status: 200, description: 'อัปเดตสถานะสำเร็จ' })
+  @ApiParam({ name: 'id', description: 'Booking ID' })
+  @ApiBody({
+    schema: {
+      properties: { status: { type: 'string', example: 'confirmed' } },
+    },
+  })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Patch(':id/status')
@@ -87,30 +98,29 @@ export class BookingsController {
     return this.bookingsService.updateStatus(id, status);
   }
 
-  // 4. Endpoint สำหรับเช็คสถานะจากคิว (Polling)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Check queue status' })
-  @ApiResponse({ status: 200, description: 'Return queue status.' })
-  @Get('status/:trackingId')
+  @ApiOperation({ summary: 'เช็คสถานะจากคิว (Polling)' })
+  @ApiResponse({ status: 200, description: 'คืนค่าสถานะคิว' })
+  @ApiParam({ name: 'trackingId', description: 'Tracking ID จากการ Enqueue' })
   @UseGuards(AccessTokenGuard)
+  @Get('status/:trackingId')
   async getStatus(@Param('trackingId') trackingId: string) {
     return this.bookingQueueService.getStatus(trackingId);
   }
 
-  // 5. Endpoint สำหรับ Admin ดูการจองทั้งหมด (รองรับ Pagination สำหรับตั๋วแสนใบ!)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all bookings (Admin only)' })
+  @ApiOperation({ summary: '[Admin] ดูประวัติการจองทั้งหมด' })
   @ApiQuery({ name: 'page', required: false, type: String })
   @ApiQuery({ name: 'limit', required: false, type: String })
   @ApiResponse({
     status: 200,
-    description: 'Return all bookings with pagination.',
+    description: 'คืนค่ารายการจองทั้งหมดพร้อมระบบแบ่งหน้า',
   })
   @Roles('admin')
-  @Get('all-bookings')
   @UseGuards(AccessTokenGuard, RolesGuard)
+  @Get('all-bookings')
   async findAllBookings(
-    @Query('page') page: string = '1', // รับเป็น string ก่อนแล้วค่อยแปลง
+    @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
   ) {
     return this.bookingsService.findAllForAdmin(
@@ -120,25 +130,26 @@ export class BookingsController {
   }
 
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Confirm booking' })
-  @ApiResponse({ status: 200, description: 'Booking confirmed.' })
-  @Patch(':id/confirm')
+  @ApiOperation({ summary: 'ยืนยันการจอง (Confirm Booking)' })
+  @ApiResponse({ status: 200, description: 'ยืนยันการจองสำเร็จ' })
+  @ApiParam({ name: 'id', description: 'Booking ID' })
   @UseGuards(AccessTokenGuard)
+  @Patch(':id/confirm')
   async confirmBooking(@Param('id') id: string) {
-    // เปลี่ยนสถานะเป็น confirmed ใน MongoDB
     return this.bookingsService.updateStatus(id, 'confirmed');
   }
 
+  @ApiOperation({ summary: 'เช็คสถานะคิวแบบละเอียด' })
+  @ApiParam({ name: 'trackingId', description: 'Tracking ID' })
   @Get('queue-status/:trackingId')
-  // 🎯 ระบุ Type เป็น any หรือ BookingStatus เพื่อเลี่ยง Error TS4053
   checkStatus(@Param('trackingId') trackingId: string): any {
-    // 🎯 เรียกชื่อฟังก์ชันให้ตรงกับใน Service (คือ getStatus)
-    const result = this.bookingQueueService.getStatus(trackingId);
-    return result;
+    return this.bookingQueueService.getStatus(trackingId);
   }
 
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Admin] ลบรายการจอง' })
+  @ApiResponse({ status: 200, description: 'ลบรายการจองสำเร็จ' })
+  @ApiParam({ name: 'id', description: 'Booking ID' })
   @Roles('admin')
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Delete(':id')
