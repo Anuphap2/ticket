@@ -11,7 +11,7 @@ export class EventsService {
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
-  ) { }
+  ) {}
 
   // 1. สร้างกิจกรรมใหม่
   async create(dto: CreateEventDto): Promise<Event> {
@@ -57,14 +57,32 @@ export class EventsService {
       for (const newZone of dto.zones) {
         // 1. ตรวจสอบว่าเป็นโซนที่มีอยู่เดิม หรือเป็นโซนใหม่
         const oldZone = oldEvent.zones.find(
-          (z) => (z as any)._id.toString() === (newZone as any)._id?.toString(),
+          (z) => z._id.toString() === (newZone as any)._id?.toString(),
         );
 
         if (oldZone) {
           // 🎯 กรณีที่ 1: โซนเดิม (เช็คเปลี่ยนชื่อ)
           if (oldZone.name !== newZone.name) {
-            console.log(`กำลังเปลี่ยนชื่อโซนจาก ${oldZone.name} เป็น ${newZone.name}`);
-            await this.ticketsService.updateZoneName(id, oldZone.name, newZone.name);
+            console.log(
+              `กำลังเปลี่ยนชื่อโซนจาก ${oldZone.name} เป็น ${newZone.name}`,
+            );
+            await this.ticketsService.updateZoneName(
+              id,
+              oldZone.name,
+              newZone.name,
+            );
+          }
+
+          if (oldZone.totalSeats !== newZone.totalSeats) {
+            console.log(
+              `กำลังอัปเดตจำนวนที่นั่งในโซน ${newZone.name} จาก ${oldZone.totalSeats} เป็น ${newZone.totalSeats}`,
+            );
+            await this.ticketsService.updateZoneSeats(
+              id,
+              newZone,
+              oldZone.totalSeats,
+              newZone.totalSeats - oldZone.totalSeats,
+            );
           }
         } else {
           // 🎯 กรณีที่ 2: โซนใหม่ (ยังไม่มีใน DB)

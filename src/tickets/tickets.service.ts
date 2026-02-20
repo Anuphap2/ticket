@@ -10,7 +10,7 @@ import { CreateTicketDto } from './dto/ticket.dto';
 export class TicketsService {
   constructor(
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
-  ) {}
+  ) { }
 
   // สร้างตั๋วทีละใบ
   async create(createTicketDto: CreateTicketDto) {
@@ -86,6 +86,25 @@ export class TicketsService {
     });
     if (!ticket) throw new NotFoundException('ไม่พบตั๋วใบนี้');
     return ticket;
+  }
+
+  async updateZoneSeats(eventId: string, zone: any, startOffset: number, count: number) {
+    // ระบุ Type เป็น any[] หรือสร้าง Interface รองรับเพื่อแก้ปัญหา 'never'
+    const newTickets: any[] = [];
+
+    for (let i = 1; i <= count; i++) {
+      const seatIndex = startOffset + i;
+      newTickets.push({
+        eventId: eventId,
+        zoneName: zone.name,
+        // รันเลขที่นั่งต่อจากของเดิม
+        seatNumber: zone.type === 'seated' ? `${zone.name}${seatIndex}` : null,
+        status: 'available',
+      });
+    }
+
+    // ใช้ insertMany เพื่อความรวดเร็ว
+    return this.ticketModel.insertMany(newTickets);
   }
 
   // 1. หาตั๋วที่ระบุเลขที่นั่ง (Seated)
