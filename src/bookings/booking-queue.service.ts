@@ -121,10 +121,7 @@ export class BookingQueueService {
 
     try {
       // ✅ 1. สร้าง Queue Record ใน DB
-      const queueRecord = await this.queueService.create(
-        userId,
-        dto.eventId,
-      );
+      await this.queueService.create(userId, dto.eventId);
 
       // ✅ 2. Reserve seat (ถ้ามี)
       if (dto.seatNumbers?.length) {
