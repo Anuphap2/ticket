@@ -34,6 +34,7 @@ export class BookingQueueService {
   private globalCounter = 0; // นับลำดับคิวสะสม
 
   private readonly CLEANUP_TIMEOUT = 10 * 60 * 1000; // 10 นาที
+  private readonly CONCURRENCY = 50; // จํานวน Worker ที่ทำงานพร้อมกัน
 
   constructor(
     private readonly bookingsService: BookingsService,
@@ -41,36 +42,50 @@ export class BookingQueueService {
     private readonly queueService: QueueService,
   ) {}
 
+  private async worker() {
+    // Worker แต่ละตัวจะแย่งกันหยิบงานจาก Index ปัจจุบัน
+    while (this.headIndex < this.queue.length) {
+      const item = this.queue[this.headIndex++]; // หยิบงานและเลื่อน Index ทันที
+
+      if (!item) continue;
+
+      try {
+        await this.handleTask(item);
+      } catch (err) {
+        this.logger.error('Worker error', err);
+      } finally {
+        this.totalProcessed++;
+
+        // คืน Breath ให้ Event Loop เป็นระยะๆ เพื่อให้รับ Request ใหม่ได้ลื่น
+        if (this.totalProcessed % 20 === 0) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+      }
+
+      // Memory Management: Trim คิวเมื่อสะสมเยอะเกินไป
+      if (this.headIndex > 0 && this.headIndex >= this.queue.length / 2) {
+        this.queue = this.queue.slice(this.headIndex);
+        this.headIndex = 0;
+      }
+    }
+  }
   /**
    * 1. เพิ่มข้อมูลเข้าคิว (O(1))
    */
   async enqueue(userId: string, dto: CreateBookingDto) {
-    const trackingId = `${userId}-${Date.now()}`;
+    const trackingId = `${userId}-${Date.now()}-${Math.random()}`;
 
-    // ใช้ Global Counter เพื่อให้เลขลำดับไม่เพี้ยนเวลา Trim Array
     this.globalCounter++;
     const position = this.globalCounter;
-
-    // บันทึกลง MongoDB
-    await this.queueService.create(userId, dto.eventId);
-
-    // ล็อคที่นั่งทันทีเพื่อกันคนอื่นแย่ง
-    if (dto.seatNumbers && dto.seatNumbers.length > 0) {
-      await this.ticketsService.reserveTickets(
-        dto.seatNumbers,
-        userId,
-        dto.eventId,
-      );
-    }
 
     this.bookingStatus.set(trackingId, {
       status: 'processing',
       initialPosition: position,
     });
 
+    // ✅ push เข้า queue อย่างเดียว
     this.queue.push({ trackingId, userId, dto });
 
-    // สั่งเริ่ม Worker
     if (!this.isProcessing) {
       this.processQueue().catch((err) =>
         this.logger.error('Queue processing error', err),
@@ -84,37 +99,16 @@ export class BookingQueueService {
    * 2. กระบวนการประมวลผลคิวแบบ Batch (O(1) Access)
    */
   private async processQueue() {
-    if (this.isProcessing || this.headIndex >= this.queue.length) return;
+    if (this.isProcessing) return;
     this.isProcessing = true;
 
-    // ปรับจำนวนการประมวลผลพร้อมกันตามความเหมาะสม
-    const CONCURRENCY = 100;
+    // สร้าง Worker ตามจำนวนที่กำหนด ให้ทำงานพร้อมกัน
+    const workers = Array(this.CONCURRENCY)
+      .fill(null)
+      .map(() => this.worker());
 
-    while (this.headIndex < this.queue.length) {
-      // ดึงงานออกมาเป็น Batch โดยไม่ใช้ .shift()
-      const batch = this.queue.slice(
-        this.headIndex,
-        this.headIndex + CONCURRENCY,
-      );
-      this.headIndex += batch.length;
-
-      await Promise.all(
-        batch.map((item) =>
-          this.handleTask(item).finally(() => {
-            this.totalProcessed++; // อัปเดตตัวนับเพื่อคำนวณตำแหน่งสดๆ
-          }),
-        ),
-      );
-
-      // คืนหายใจให้ Event Loop (Unblock)
-      await new Promise((resolve) => setImmediate(resolve));
-
-      // ทำความสะอาด Memory เมื่อ Array เริ่มใหญ่เกินไป
-      if (this.headIndex > 5000) {
-        this.queue = this.queue.slice(this.headIndex);
-        this.headIndex = 0;
-      }
-    }
+    // รอจนกว่าทุก Worker จะทำงานเสร็จ (เมื่อคิวว่าง)
+    await Promise.all(workers);
 
     this.isProcessing = false;
   }
@@ -124,19 +118,37 @@ export class BookingQueueService {
    */
   private async handleTask(item: QueueItem) {
     const { trackingId, userId, dto } = item;
+
     try {
+      // ✅ 1. สร้าง Queue Record ใน DB
+      const queueRecord = await this.queueService.create(
+        userId,
+        dto.eventId,
+      );
+
+      // ✅ 2. Reserve seat (ถ้ามี)
+      if (dto.seatNumbers?.length) {
+        await this.ticketsService.reserveTickets(
+          dto.seatNumbers,
+          userId,
+          dto.eventId,
+        );
+      }
+
+      // ✅ 3. Activate queue
       const userQueue = await this.queueService.findAndActivateQueue(
         userId,
         dto.eventId,
       );
+
       if (!userQueue) {
-        throw new Error(
-          'ไม่พบคิวที่พร้อมใช้งาน (คิวอาจหมดอายุหรือสถานะไม่ถูกต้อง)',
-        );
+        throw new Error('ไม่พบคิวที่พร้อมใช้งาน');
       }
 
+      // ✅ 4. สร้าง Booking
       const result: Booking = await this.bookingsService.create(userId, dto);
 
+      // ✅ 5. Update queue status
       await this.queueService.updateStatus(
         userQueue._id.toString(),
         'completed',
@@ -146,15 +158,19 @@ export class BookingQueueService {
     } catch (error: any) {
       this.logger.error(`Booking failed for ${trackingId}: ${error.message}`);
 
-      // Rollback ตั๋วเมื่อเกิดข้อผิดพลาด
-      if (dto.seatNumbers && dto.seatNumbers.length > 0) {
+      // Rollback seat
+      if (dto.seatNumbers?.length) {
         await this.ticketsService.reserveTickets(
           dto.seatNumbers,
           null,
           dto.eventId,
         );
       }
-      this.finishTask(trackingId, { status: 'failed', error: error.message });
+
+      this.finishTask(trackingId, {
+        status: 'failed',
+        error: error.message,
+      });
     }
   }
 
