@@ -202,17 +202,20 @@ export class TicketsService {
   }
 
   // 🎯 4. เปลี่ยนสถานะตั๋วเป็นขายแล้ว (Sold) - ใช้ตอนจ่ายเงินสำเร็จ
-  async markAsSold(seatNumbers: string[], eventId: string) {
-    return this.ticketModel
-      .updateMany(
-        {
-          seatNumber: { $in: seatNumbers },
-          eventId: new Types.ObjectId(eventId) as any,
-        },
-        { $set: { status: 'sold' } },
-      )
-      .exec();
+  async markAsSoldById(ticketIds: string[]) {
+    const result = await this.ticketModel.updateMany(
+      {
+        _id: { $in: ticketIds },
+        status: { $ne: 'sold' }, // กัน sold ซ้ำ
+      },
+      {
+        $set: { status: 'sold' },
+      },
+    );
+
+    return result;
   }
+
   async cancelReserve(ticketIds: string[], eventId: string) {
     return this.ticketModel.updateMany(
       {

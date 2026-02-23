@@ -30,7 +30,7 @@ export class BookingsService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private ticketsService: TicketsService,
     private queueService: QueueService,
-  ) { }
+  ) {}
 
   /**
    * สร้างรายการจองใหม่ (Logic เชื่อมกับ Tickets Collection)
@@ -52,7 +52,9 @@ export class BookingsService {
 
     if (isSeated) {
       if (!dto.seatNumbers || dto.seatNumbers.length === 0) {
-        throw new BadRequestException('กรุณาระบุเลขที่นั่งสำหรับโซนระบุที่นั่ง');
+        throw new BadRequestException(
+          'กรุณาระบุเลขที่นั่งสำหรับโซนระบุที่นั่ง',
+        );
       }
 
       const tickets = await this.ticketsService.findSpecificTickets(
@@ -81,9 +83,17 @@ export class BookingsService {
     }
 
     // ... (ขั้นตอนที่ 3 และ 4 เรื่องการ reserve และหักสต็อกคงเดิม) ...
-    await this.ticketsService.reserveTickets(reservedTicketIds, userId, dto.eventId);
+    await this.ticketsService.reserveTickets(
+      reservedTicketIds,
+      userId,
+      dto.eventId,
+    );
     try {
-      await this.decreaseAvailableSeatsAtomic(dto.eventId, zoneId, dto.quantity);
+      await this.decreaseAvailableSeatsAtomic(
+        dto.eventId,
+        zoneId,
+        dto.quantity,
+      );
     } catch (error) {
       await this.ticketsService.cancelReserve(reservedTicketIds, dto.eventId);
       throw error;
@@ -188,7 +198,11 @@ export class BookingsService {
     console.log(`🚀 Attempting to decrease stock for Zone ID: ${ZoneId}`);
     const result = await this.eventModel
       .updateOne(
-        { _id: eventId }, // หา Event ให้เจอ
+        {
+          _id: eventId,
+          'zones._id': ZoneId,
+          'zones.availableSeats': { $gte: quantity },
+        }, // หา Event ให้เจอ
         {
           // 🎯 บอกว่า "ให้ลบค่าในโซนที่ชื่อว่า 'targetZone'"
           $inc: { 'zones.$[targetZone].availableSeats': -quantity },
@@ -282,26 +296,20 @@ export class BookingsService {
   }
 
   async updateStatus(bookingId: string, status: string) {
-    // 1. อัปเดตสถานะการจองก่อน
     const updatedBooking = await this.bookingModel
       .findByIdAndUpdate(bookingId, { status }, { returnDocument: 'after' })
-      .populate('tickets') // 🎯 ดึงข้อมูลตั๋วมาด้วยเพื่อเอาเลขที่นั่ง
       .exec();
 
     if (!updatedBooking) throw new NotFoundException('ไม่พบรายการจอง');
 
-    // 🎯 2. เช็คว่าถ้าสถานะที่เปลี่ยนคือ 'paid' หรือ 'confirmed' (หรือคำที่พู่กันใช้)
     if (status === 'confirmed') {
-      // ดึงเลขที่นั่งออกมา
-      const seatNumbers = (updatedBooking.tickets as any[]).map(
-        (t) => t.seatNumber,
-      );
+      const ticketIds = updatedBooking.tickets.map((t) => t.toString());
 
-      // 🚀 สั่งเปลี่ยนตั๋วเป็น SOLD ทันที
-      await this.ticketsService.markAsSold(
-        seatNumbers,
-        updatedBooking.eventId.toString(),
-      );
+      const result = await this.ticketsService.markAsSoldById(ticketIds);
+
+      if (result.modifiedCount !== ticketIds.length) {
+        throw new BadRequestException('มีตั๋วบางใบถูกขายไปแล้ว');
+      }
 
       console.log(`✅ Tickets for Booking ${bookingId} are now SOLD`);
     }
