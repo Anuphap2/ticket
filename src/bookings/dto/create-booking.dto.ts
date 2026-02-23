@@ -4,6 +4,7 @@ import {
   IsString,
   Min,
   IsOptional,
+  Max,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -27,6 +28,7 @@ export class CreateBookingDto {
   })
   @IsNotEmpty()
   @IsNumber()
+  @Max(10, { message: 'Quantity must not exceed 10' })
   @Min(1)
   quantity: number;
 

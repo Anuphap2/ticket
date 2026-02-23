@@ -5,6 +5,7 @@ import {
   MinLength,
   Matches,
   Length,
+  Max,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -47,6 +48,7 @@ export class UserDto {
     example: '0812345678',
     description: 'Thai phone number',
   })
+  @Max(10, { message: 'Phone number must be 10 digits' })
   @Matches(/^0[0-9]{9}$/, {
     message: 'Phone number must be 10 digits and start with 0',
   })
