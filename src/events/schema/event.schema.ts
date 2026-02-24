@@ -25,7 +25,11 @@ export class Event {
     type: [
       {
         name: String,
-        price: Number,
+        price: {
+        type: Number,
+        required: true,
+        min:[100, 'ราคาตั๋วต้องไม่น้อยกว่า 100 บาท']
+      },
         totalSeats: Number,
         availableSeats: Number,
         type: {

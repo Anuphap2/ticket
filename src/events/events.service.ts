@@ -131,12 +131,30 @@ export class EventsService {
       );
     }
 
-    const updatedEvent = await this.eventModel
-      .findByIdAndUpdate(id, { $set: updateData }, { returnDocument: 'after' })
-      .exec();
-
+    try {
+  const updatedEvent = await this.eventModel
+    .findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      {
+        returnDocument: 'after',
+        runValidators: true,
+        context: 'query',
+      },
+    )
+    .exec();
     if (!updatedEvent) throw new NotFoundException('อัปเดตข้อมูลล้มเหลว');
     return updatedEvent;
+    } catch (error) {
+    // ⭐ ดัก ValidationError จาก mongoose
+    if (error.name === 'ValidationError') {
+      throw new BadRequestException(
+        'ราคาตั๋วต้องไม่น้อยกว่า 100 บาท',
+      );
+    }
+
+    throw error;
+  }
   }
   // 5. ลบกิจกรรม
   async remove(id: string) {
