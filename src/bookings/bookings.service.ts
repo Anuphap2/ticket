@@ -23,7 +23,7 @@ import { QueueService } from 'src/queue/queue.service';
 export class BookingsService {
   // 🎯 ปรับเวลาที่นี่ที่เดียว (หน่วยเป็นมิลลิวินาที)
   // 30 * 1000 = 30 วินาที
-  private readonly EXPIRE_TIME_MS = 30 * 1000;
+  private readonly EXPIRE_TIME_MS = 60 * 1000;
 
   constructor(
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,

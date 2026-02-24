@@ -25,7 +25,12 @@ export class Event {
     type: [
       {
         name: String,
-        price: Number,
+        price: {
+          type: Number,
+          required: true,
+          min: [0, 'Price cannot be negative'],
+          max: [900000, 'Price cannot exceed 900,000 THB'],
+        },
         totalSeats: Number,
         availableSeats: Number,
         type: {
