@@ -47,9 +47,9 @@ export class UserDto {
     example: '0812345678',
     description: 'Thai phone number',
   })
-  @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
-  @IsString()
   @IsNotEmpty()
+  @IsString()
+  @Length(10, 10, { message: 'Phone number must be 10 digits' })
   @Matches(/^0[0-9]{9}$/, {
     message: 'Phone number must be 10 digits and start with 0',
   })
