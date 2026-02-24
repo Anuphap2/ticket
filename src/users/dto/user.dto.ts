@@ -48,7 +48,7 @@ export class UserDto {
     example: '0812345678',
     description: 'Thai phone number',
   })
-  @Max(10, { message: 'Phone number must be 10 digits' })
+  @Length(10, 10, { message: 'Phone number must be 10 digits' })
   @Matches(/^0[0-9]{9}$/, {
     message: 'Phone number must be 10 digits and start with 0',
   })
