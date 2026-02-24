@@ -115,13 +115,13 @@ export class EventsController {
     const event = await this.eventsService.findOne(id);
 
     // ✅ ลบรูปเก่า "เฉพาะตอนเปลี่ยนรูปจริงๆ"
-    if (
-      dto.imageUrl &&
-      event.imageUrl &&
-      dto.imageUrl !== event.imageUrl
-    ) {
-      this.removeImageByUrl(event.imageUrl);
-    }
+  if (
+  typeof dto.imageUrl === 'string' &&
+  dto.imageUrl.length > 0 &&
+  event.imageUrl &&
+  dto.imageUrl !== event.imageUrl) {
+  this.removeImageByUrl(event.imageUrl);
+}
 
     return this.eventsService.update(id, dto);
   }
