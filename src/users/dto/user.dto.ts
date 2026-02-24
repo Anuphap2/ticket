@@ -6,6 +6,7 @@ import {
   Matches,
   Length,
   Max,
+  Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -21,11 +22,11 @@ export class UserDto {
   @ApiProperty({
     example: 'password123',
     description: 'The password of the user',
-    minLength: 6,
+    minLength: 8,
   })
   @IsNotEmpty()
   @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters long' })
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
   password: string;
 
   @ApiProperty({
@@ -48,7 +49,9 @@ export class UserDto {
     example: '0812345678',
     description: 'Thai phone number',
   })
-  @Max(10, { message: 'Phone number must be 10 digits' })
+  @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
+  @IsString()
+  @IsNotEmpty()
   @Matches(/^0[0-9]{9}$/, {
     message: 'Phone number must be 10 digits and start with 0',
   })
@@ -59,6 +62,7 @@ export class UserDto {
     description: 'Thai national ID (13 digits)',
   })
   @IsString()
+  @IsNotEmpty()
   @Length(13, 13, {
     message: 'National ID must be exactly 13 digits',
   })
