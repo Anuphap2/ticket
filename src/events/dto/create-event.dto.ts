@@ -22,8 +22,8 @@ class ZoneDto {
   @ApiProperty({ example: 1000 })
   @IsNumber()
   @IsNotEmpty()
-  @Min(100)
-  @Max(900000)
+  @Min(100, { message: 'price must be at least 100' })
+  @Max(900000, { message: 'price must be less than or equal to 900,000' })
   price: number;
 
   @ApiProperty({ example: 50 })
