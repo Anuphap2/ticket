@@ -10,6 +10,7 @@ import {
   Min,
   Max,
   ArrayMinSize,
+  Length,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -65,9 +66,11 @@ export class CreateEventDto {
   @ApiProperty({ example: 'Best concert ever' })
   @IsString()
   @IsOptional()
+  @Length(0, 1500, { message: 'description must be at most 1500 characters' })
   description?: string;
 
   @ApiProperty({ example: '2023-12-31T18:00:00Z' })
+  @IsNotEmpty()
   @IsDateString()
   date: string;
 
