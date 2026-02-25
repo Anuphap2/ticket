@@ -9,6 +9,7 @@ import {
   ValidateNested,
   Min,
   Max,
+  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -86,6 +87,8 @@ export class CreateEventDto {
   @ApiProperty({ type: [ZoneDto] })
   @IsArray()
   @ValidateNested({ each: true })
+  @IsNotEmpty()
+  @ArrayMinSize(1, { message: 'At least one zone must be provided' })
   @Type(() => ZoneDto)
   zones: ZoneDto[];
 }
