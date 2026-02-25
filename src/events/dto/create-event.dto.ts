@@ -53,6 +53,8 @@ class ZoneDto {
   @ApiProperty({ example: 5, required: false })
   @IsOptional()
   @IsNumber()
+  @Min(1, { message: 'seatsPerRow must be at least 1' })
+  @Max(100, { message: 'seatsPerRow must be less than or equal to 100' })
   seatsPerRow?: number;
 }
 
