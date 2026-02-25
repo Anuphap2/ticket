@@ -1,90 +1,62 @@
-````markdown
-# 🎟️ Ticket Booking System (High Concurrency Simulation)
+# 🎟️ Concert Ticket Booking System (High Concurrency)
 
-โปรเจกต์ระบบจองตั๋วคอนเสิร์ตที่ออกแบบมาเพื่อรองรับการใช้งานพร้อมกันจำนวนมาก (High Concurrency) โดยใช้สถาปัตยกรรมแบบ **Asynchronous Queue** เพื่อแก้ไขปัญหา Race Condition และป้องกันระบบล่มเมื่อมีผู้ใช้งานรุมกดบัตรในวินาทีเดียวกัน
-
----
+ระบบจองตั๋วคอนเสิร์ตที่ออกแบบมาเพื่อรองรับการเข้าใช้งานพร้อมกันจำนวนมหาศาล (High Concurrency) โดยใช้สถาปัตยกรรมแบบ **Asynchronous Queue** และ **Atomic Operations** เพื่อแก้ปัญหาการจองเกิน (Overbooking) และรักษาความเสถียรของระบบในสภาวะที่มีโหลดการใช้งานสูงเป็นพิเศษ
 
 ## 🚀 จุดเด่นของระบบ (Key Features)
 
-- **Asynchronous Queue Management:** ใช้โครงสร้างข้อมูลแบบ Queue (FIFO) ในการจัดการลำดับการจอง เพื่อลดภาระของ Database
-- **Non-blocking Request Handling:** ระบบตอบกลับทันทีพร้อม `trackingId` ทำให้ผู้ใช้งานไม่ต้องรอคอยนาน (ลดโอกาสเกิด Timeout)
-- **Atomic Operation:** ใช้ `$inc` ของ MongoDB เพื่อให้มั่นใจว่าจำนวนที่นั่งจะมีความแม่นยำ 100% แม้มีการจองพร้อมกันหลักแสนครั้ง
-- **Scalable Architecture:** แยกส่วนการรับคำขอและการบันทึกข้อมูลออกจากกัน (Background Processing) ทำให้ระบบมีความเสถียรสูง
-
----
-
-## 🛠️ Tech Stack
-
-- **Backend:** [NestJS](https://nestjs.com/) (Node.js Framework)
-- **Database:** [MongoDB](https://www.mongodb.com/) with Mongoose
-- **Documentation:** [Swagger (OpenAPI)](https://swagger.io/)
-- **Testing:** Axios-based Stress Test Script (Node.js)
-
----
-
-## 📊 ผลการทดสอบประสิทธิภาพ (Stress Test Results)
-
-จากการทดสอบจำลองสถานการณ์ "สงครามกดบัตร" (K-Pop Concert Simulation) ด้วยการส่งคำขอพร้อมกันจำนวนมากบนเครื่องเครื่องเดียว:
-
-| หัวข้อการทดสอบ                  | รายละเอียด / ผลลัพธ์                                    |
-| :------------------------------ | :------------------------------------------------------ |
-| **จำนวน Request ทั้งหมด**       | 100,000 รายการ                                          |
-| **ส่งเข้าคิวสำเร็จ (Enqueue)**  | **46,319 รายการ** (บนสภาวะเครื่องเดี่ยว)                |
-| **ความเร็วเฉลี่ย (Throughput)** | **~280 - 300 Requests/sec**                             |
-| **ความถูกต้องของข้อมูล**        | **Pass** - จำนวนที่นั่งถูกหักออกตรงตามจำนวนที่จองสำเร็จ |
-
-> **หมายเหตุ:** ข้อผิดพลาดที่เกิดขึ้น (Network Error) ในช่วงท้ายของการทดสอบ เกิดจากขีดจำกัดของระบบปฏิบัติการ (OS Socket Limit) ไม่ใช่ข้อผิดพลาดจากตัวโปรแกรม
-
----
+* **Asynchronous Queue Management**: ใช้โครงสร้างข้อมูลแบบ Queue (FIFO) ในการรับคำขอเข้าสู่ระบบทันทีแบบ Non-blocking ทำให้ Server ตอบกลับ `trackingId` ได้ในหลักมิลลิวินาที ลดโอกาสเกิด Request Timeout แม้มีผู้ใช้รุมกดบัตรพร้อมกัน
+* **Atomic Inventory Updates**: ใช้ Operator `$inc` ของ MongoDB พร้อมเงื่อนไขการตรวจสอบสต็อกในระดับ Database เพื่อให้มั่นใจว่าจำนวนที่นั่งจะมีความแม่นยำ 100% และไม่มีการขายเกินจำนวน (No Overbooking)
+* **Scalable Architecture**: แยกส่วนการรับคำขอ (Request Handling) และการบันทึกข้อมูล (Worker Processing) ออกจากกัน ทำให้ระบบมีความเสถียรสูงและจัดการภาระงานหนักได้ดี
+* **Secure Authentication**: ปกป้องข้อมูลผู้ใช้ด้วยระบบ JWT (Access & Refresh Tokens) และการ Hash ข้อมูลสำคัญด้วย `argon2`
 
 ## 🏗️ ขั้นตอนการทำงาน (System Workflow)
 
-1.  **Request:** ผู้ใช้ส่งคำขอจองตั๋วผ่าน `POST /bookings`
-2.  **Queueing:** Server รับคำขอแล้วโยนเข้า **Internal Array Queue** ทันที พร้อมตอบกลับ `trackingId` ในหลักมิลลิวินาที
-3.  **Processing:** ระบบ Background Worker ทยอยดึงงานจาก Queue มาบันทึกลง **MongoDB** อย่างต่อเนื่อง
-4.  **Polling:** ผู้ใช้นำ `trackingId` มาเช็คสถานะการจองผ่าน `GET /bookings/status/:id`
+1.  **Request**: ผู้ใช้ส่งคำขอจองตั๋วผ่าน `POST /bookings`
+2.  **Queueing**: ระบบรับคำขอแล้วโยนเข้า **Internal Queue** ทันที พร้อมตอบกลับ `trackingId` เพื่อให้ผู้ใช้นำไปเช็คสถานะ
+3.  **Processing**: ระบบ Background Worker ดึงงานจาก Queue มาทำ **Atomic Update** เพื่อหักที่นั่งและบันทึกลง MongoDB
+4.  **Status Polling**: ผู้ใช้นำ `trackingId` มาเช็คสถานะการจองผ่าน `GET /bookings/status/:id`
+5.  **Auto-Cancellation**: มีระบบ Timer ตรวจสอบการชำระเงิน หากไม่สำเร็จภายในเวลาที่กำหนด (เช่น 60 วินาที) ระบบจะคืนสต็อกเข้าสู่ระบบโดยอัตโนมัติ
 
----
+## 📊 ผลการทดสอบประสิทธิภาพ (Stress Test Results)
+
+จำลองสถานการณ์ "สงครามกดบัตร" (K-Pop Concert Simulation) บนเครื่องทดสอบเดี่ยวใน 2 ระดับ:
+
+### 1. Burst Load Test (10,000 Requests)
+* **จำนวน Request ทั้งหมด**: 10,000 รายการ
+* **เข้าคิวสำเร็จ (Success)**: **9,772 รายการ**
+* **ความเร็วสูงสุด (Peak Throughput)**: **~1,475.14 Requests/sec**
+* **เวลาที่ใช้ทั้งหมด**: **6.78 วินาที**
+
+### 2. Sustained Heavy Load Test (100,000 Requests)
+* **จำนวน Request ทั้งหมด**: 100,000 รายการ
+* **เข้าคิวสำเร็จ (Success)**: **41,181 รายการ**
+* **ความเร็วเฉลี่ย (Average Throughput)**: **~957.45 Requests/sec**
+* **เวลาที่ใช้ทั้งหมด**: **104.44 วินาที**
+* **ความถูกต้องของข้อมูล**: **Pass** (จำนวนที่นั่งถูกหักออกตรงตามจำนวนที่จองสำเร็จ 100%)
+
+> **หมายเหตุ**: Network Error ที่เกิดขึ้นในช่วงโหลดหนักสูงสุด มีสาเหตุหลักมาจากข้อจำกัดของระบบปฏิบัติการ (OS Socket Limit) ในการทดสอบบนเครื่องเดี่ยว ไม่ใช่ข้อผิดพลาดจาก Logic ของระบบ
+
+## 🛠️ Tech Stack
+
+* **Backend**: NestJS (Node.js Framework)
+* **Database**: MongoDB with Mongoose
+* **Security**: Argon2, JWT (Access & Refresh Tokens)
+* **Payment**: Stripe Integration
+* **Documentation**: Swagger (OpenAPI)
+* **Testing**: Axios-based Stress Test Script
 
 ## 📝 วิธีการติดตั้งและรันโปรเจกต์
 
-### 1. ติดตั้ง Library ที่จำเป็น
-
-```bash
-npm install
-```
-````
-
-### 2. ตั้งค่าไฟล์ .env
-
-สร้างไฟล์ `.env` ที่ Root Directory แล้วใส่ค่าดังนี้:
-
-```env
-MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret_key
-
-```
-
-### 3. รัน Server (Development Mode)
-
-```bash
-npm run start:dev
-
-```
-
-### 4. ตรวจสอบ API Documentation
-
-เปิด Browser ไปที่: `http://localhost:3000/api/docs` เพื่อใช้งาน Swagger UI
+1.  **ติดตั้ง Library**:
+    ```bash
+    npm install
+    ```
+2.  **ตั้งค่า Environment**: สร้างไฟล์ `.env` ที่ Root Directory ตามตัวอย่างใน `.env.example`
+3.  **รัน Server (Development)**:
+    ```bash
+    npm run start:dev
+    ```
+4.  **ตรวจสอบ API Documentation**: เข้าไปที่ `http://localhost:3000/api/docs` เพื่อใช้งาน Swagger UI
 
 ---
-
-## 🧪 วิธีการรัน Stress Test
-
-1. ตรวจสอบไฟล์ `test.js` และใส่ Token ที่ถูกต้อง
-2. รันคำสั่ง:
-
-```bash
-node test.js
-
-```
+*โปรเจกต์นี้ออกแบบมาเพื่อแก้ปัญหา Race Condition และรองรับการทำงานแบบ High Concurrency อย่างมีประสิทธิภาพ*
