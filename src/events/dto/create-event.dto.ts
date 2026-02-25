@@ -46,6 +46,8 @@ class ZoneDto {
   @ApiProperty({ example: 10, required: false })
   @IsOptional()
   @IsNumber()
+  @Min(1, { message: 'rows must be at least 1' })
+  @Max(26, { message: 'rows must be less than or equal to 26' })
   rows?: number;
 
   @ApiProperty({ example: 5, required: false })
