@@ -1,4 +1,4 @@
-```markdown
+````markdown
 # 🎟️ Ticket Booking System (High Concurrency Simulation)
 
 โปรเจกต์ระบบจองตั๋วคอนเสิร์ตที่ออกแบบมาเพื่อรองรับการใช้งานพร้อมกันจำนวนมาก (High Concurrency) โดยใช้สถาปัตยกรรมแบบ **Asynchronous Queue** เพื่อแก้ไขปัญหา Race Condition และป้องกันระบบล่มเมื่อมีผู้ใช้งานรุมกดบัตรในวินาทีเดียวกัน
@@ -7,19 +7,19 @@
 
 ## 🚀 จุดเด่นของระบบ (Key Features)
 
-* **Asynchronous Queue Management:** ใช้โครงสร้างข้อมูลแบบ Queue (FIFO) ในการจัดการลำดับการจอง เพื่อลดภาระของ Database
-* **Non-blocking Request Handling:** ระบบตอบกลับทันทีพร้อม `trackingId` ทำให้ผู้ใช้งานไม่ต้องรอคอยนาน (ลดโอกาสเกิด Timeout)
-* **Atomic Operation:** ใช้ `$inc` ของ MongoDB เพื่อให้มั่นใจว่าจำนวนที่นั่งจะมีความแม่นยำ 100% แม้มีการจองพร้อมกันหลักแสนครั้ง
-* **Scalable Architecture:** แยกส่วนการรับคำขอและการบันทึกข้อมูลออกจากกัน (Background Processing) ทำให้ระบบมีความเสถียรสูง
+- **Asynchronous Queue Management:** ใช้โครงสร้างข้อมูลแบบ Queue (FIFO) ในการจัดการลำดับการจอง เพื่อลดภาระของ Database
+- **Non-blocking Request Handling:** ระบบตอบกลับทันทีพร้อม `trackingId` ทำให้ผู้ใช้งานไม่ต้องรอคอยนาน (ลดโอกาสเกิด Timeout)
+- **Atomic Operation:** ใช้ `$inc` ของ MongoDB เพื่อให้มั่นใจว่าจำนวนที่นั่งจะมีความแม่นยำ 100% แม้มีการจองพร้อมกันหลักแสนครั้ง
+- **Scalable Architecture:** แยกส่วนการรับคำขอและการบันทึกข้อมูลออกจากกัน (Background Processing) ทำให้ระบบมีความเสถียรสูง
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Backend:** [NestJS](https://nestjs.com/) (Node.js Framework)
-* **Database:** [MongoDB](https://www.mongodb.com/) with Mongoose
-* **Documentation:** [Swagger (OpenAPI)](https://swagger.io/)
-* **Testing:** Axios-based Stress Test Script (Node.js)
+- **Backend:** [NestJS](https://nestjs.com/) (Node.js Framework)
+- **Database:** [MongoDB](https://www.mongodb.com/) with Mongoose
+- **Documentation:** [Swagger (OpenAPI)](https://swagger.io/)
+- **Testing:** Axios-based Stress Test Script (Node.js)
 
 ---
 
@@ -27,12 +27,12 @@
 
 จากการทดสอบจำลองสถานการณ์ "สงครามกดบัตร" (K-Pop Concert Simulation) ด้วยการส่งคำขอพร้อมกันจำนวนมากบนเครื่องเครื่องเดียว:
 
-| หัวข้อการทดสอบ | รายละเอียด / ผลลัพธ์ |
-| :--- | :--- |
-| **จำนวน Request ทั้งหมด** | 100,000 รายการ |
-| **ส่งเข้าคิวสำเร็จ (Enqueue)** | **46,319 รายการ** (บนสภาวะเครื่องเดี่ยว) |
-| **ความเร็วเฉลี่ย (Throughput)** | **~280 - 300 Requests/sec** |
-| **ความถูกต้องของข้อมูล** | **Pass** - จำนวนที่นั่งถูกหักออกตรงตามจำนวนที่จองสำเร็จ |
+| หัวข้อการทดสอบ                  | รายละเอียด / ผลลัพธ์                                    |
+| :------------------------------ | :------------------------------------------------------ |
+| **จำนวน Request ทั้งหมด**       | 100,000 รายการ                                          |
+| **ส่งเข้าคิวสำเร็จ (Enqueue)**  | **46,319 รายการ** (บนสภาวะเครื่องเดี่ยว)                |
+| **ความเร็วเฉลี่ย (Throughput)** | **~280 - 300 Requests/sec**                             |
+| **ความถูกต้องของข้อมูล**        | **Pass** - จำนวนที่นั่งถูกหักออกตรงตามจำนวนที่จองสำเร็จ |
 
 > **หมายเหตุ:** ข้อผิดพลาดที่เกิดขึ้น (Network Error) ในช่วงท้ายของการทดสอบ เกิดจากขีดจำกัดของระบบปฏิบัติการ (OS Socket Limit) ไม่ใช่ข้อผิดพลาดจากตัวโปรแกรม
 
@@ -50,10 +50,11 @@
 ## 📝 วิธีการติดตั้งและรันโปรเจกต์
 
 ### 1. ติดตั้ง Library ที่จำเป็น
+
 ```bash
 npm install
-
 ```
+````
 
 ### 2. ตั้งค่าไฟล์ .env
 
