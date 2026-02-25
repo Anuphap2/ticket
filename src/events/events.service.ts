@@ -149,7 +149,7 @@ export class EventsService {
     // ⭐ ดัก ValidationError จาก mongoose
     if (error.name === 'ValidationError') {
       throw new BadRequestException(
-        'ราคาตั๋วต้องไม่น้อยกว่า 100 บาท',
+        'price must be at least 100',
       );
     }
 
