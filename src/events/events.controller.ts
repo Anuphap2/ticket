@@ -83,11 +83,7 @@ export class EventsController {
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('ไม่พบไฟล์ที่อัปโหลด');
 
-    const baseUrl =
-      this.configService.get<string>('BACKEND_URL') ||
-      'http://localhost:3000';
-
-    return { url: `${baseUrl}/uploads/${file.filename}` };
+    return { url: `/uploads/${file.filename}` };
   }
 
   // ---------------- CREATE EVENT ----------------
